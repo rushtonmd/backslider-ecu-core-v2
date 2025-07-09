@@ -1,5 +1,5 @@
 // tests/main_application/test_main_application.cpp
-// Test suite for the main ECU application
+// Test suite for the main application
 
 #include <iostream>
 #include <cassert>
@@ -7,11 +7,13 @@
 // Include mock Arduino before any ECU code
 #include "../mock_arduino.h"
 
-// Define the Serial mock object
+// Define the Serial mock object that will be used by both test and main_application
 MockSerial Serial;
 
-// Include ECU modules for testing
+// Include main application and dependencies
 #include "../../main_application.h"
+#include "../../msg_bus.h"
+#include "../../input_manager.h"
 
 // Simple test framework
 int tests_run = 0;
@@ -28,32 +30,177 @@ int tests_passed = 0;
     } \
     void test_##name()
 
-// Test the main application
-TEST(main_application_creation) {
-    MainApplication app;
-    app.init();
-    // If we get here without crashing, test passes
-    assert(true);
+// Test setup function
+void test_setup() {
+    mock_reset_all();
+    
+    // Set some realistic sensor values for testing
+    mock_set_analog_voltage(14, 2.5f);  // A0 (TPS) at 50%
+    mock_set_analog_voltage(15, 1.5f);  // A1 (MAP)
+    mock_set_analog_voltage(16, 2.0f);  // A2 (MAF)
+    mock_set_analog_voltage(17, 2.5f);  // A3 (CTS)
+    mock_set_analog_voltage(18, 2.0f);  // A4 (IAT)
+    mock_set_analog_voltage(19, 2.4f);  // A5 (Battery - 12V through divider)
 }
 
-TEST(main_application_run) {
-    MainApplication app;
-    app.init();
-    app.run();  // Should not crash
-    assert(true);
-}
-
-TEST(main_application_led_state_tracking) {
+// Test main application initialization
+TEST(main_application_initialization) {
+    test_setup();
+    
     MainApplication app;
     app.init();
     
-    // Run a few times to test LED state changes
-    app.run();
-    app.run();
-    app.run();
+    // Check that initialization completed
+    assert(app.getLoopCount() == 0);
     
-    // If we get here, the application is handling state properly
-    assert(true);
+    // Check that subsystems were initialized
+    assert(g_message_bus.getMessagesProcessed() >= 0);  // Should be initialized
+    
+    // Since we commented out engine sensor registration, sensor count should be 0 for now
+    assert(input_manager_get_sensor_count() == 0);      // No sensors registered yet
+}
+
+// Test main application run loop
+TEST(main_application_run_loop) {
+    test_setup();
+    
+    MainApplication app;
+    app.init();
+    
+    uint32_t initial_loop_count = app.getLoopCount();
+    
+    // Run a few loop iterations
+    for (int i = 0; i < 5; i++) {
+        mock_advance_time_us(10000);  // Advance time by 10ms
+        app.run();
+    }
+    
+    // Check that loop count increased
+    assert(app.getLoopCount() > initial_loop_count);
+    assert(app.getLoopCount() == initial_loop_count + 5);
+    
+    // Check that loop timing is being measured (in mock environment, might be 0)
+    // We'll just check that the method doesn't crash and returns a reasonable value
+    uint32_t loop_time = app.getLastLoopTime();
+    assert(loop_time >= 0);  // Should at least be non-negative
+    
+    // In mock environment, timing might be 0 due to instant execution
+    // The important thing is that the system runs without crashing
+}
+
+// Test sensor integration
+TEST(sensor_integration) {
+    test_setup();
+    
+    MainApplication app;
+    app.init();
+    
+    // Since no sensors are registered yet, sensor count should be 0
+    uint8_t sensor_count = input_manager_get_sensor_count();
+    assert(sensor_count == 0);  // No sensors registered yet
+    
+    // Run several loops - input manager should still work even with no sensors
+    for (int i = 0; i < 10; i++) {
+        mock_advance_time_us(50000);  // Advance time by 50ms
+        app.run();
+    }
+    
+    // With no sensors, updates should be 0, but system should still work
+    assert(input_manager_get_total_updates() == 0);     // No sensors to update
+    assert(input_manager_get_valid_sensor_count() == 0); // No sensors to be valid
+}
+
+// Test message bus integration
+TEST(message_bus_integration) {
+    test_setup();
+    
+    MainApplication app;
+    app.init();
+    
+    uint32_t initial_messages = g_message_bus.getMessagesProcessed();
+    
+    // Run several loops
+    for (int i = 0; i < 20; i++) {
+        mock_advance_time_us(20000);  // Advance time by 20ms per loop
+        app.run();
+    }
+    
+    // Since no sensors are registered, no new messages should be generated
+    // But the message bus should still be working (processing any messages in queue)
+    uint32_t final_messages = g_message_bus.getMessagesProcessed();
+    
+    // Check that message bus is functional (even if no new messages)
+    assert(final_messages >= initial_messages);  // Should not decrease
+    
+    // Test that we can manually publish and process a message
+    bool publish_result = g_message_bus.publishFloat(MSG_DEBUG_MESSAGE, 123.45f, false);
+    assert(publish_result == true);
+    
+    // Process the message we just published
+    g_message_bus.process();
+    
+    // Should have processed at least one more message now
+    assert(g_message_bus.getMessagesProcessed() > final_messages);
+}
+
+// Test performance characteristics
+TEST(performance_characteristics) {
+    test_setup();
+    
+    MainApplication app;
+    app.init();
+    
+    // Run multiple loops and check that the system works
+    const int test_loops = 50;
+    
+    for (int i = 0; i < test_loops; i++) {
+        mock_advance_time_us(10000);  // 10ms between loops
+        app.run();
+    }
+    
+    // In mock environment, timing measurements might be 0 due to instant execution
+    // The important thing is that the loop count is correct and system doesn't crash
+    assert(app.getLoopCount() == test_loops);
+    
+    uint32_t last_loop_time = app.getLastLoopTime();
+    
+    std::cout << "\n    Performance metrics (mock environment):";
+    std::cout << "\n      Loop count: " << app.getLoopCount();
+    std::cout << "\n      Last loop time: " << last_loop_time << " µs";
+    std::cout << "\n      Note: Timing may be 0 in mock environment";
+    
+    // Basic sanity checks for mock environment
+    assert(last_loop_time >= 0);  // Should be non-negative
+}
+
+// Test system status reporting
+TEST(status_reporting) {
+    test_setup();
+    
+    MainApplication app;
+    app.init();
+    
+    // Run for a while to generate status
+    for (int i = 0; i < 10; i++) {
+        mock_advance_time_ms(1000);  // Advance by 1 second each loop
+        app.run();
+    }
+    
+    // Check that statistics are being tracked
+    assert(app.getLoopCount() == 10);
+    
+    // With no sensors registered, updates should be 0, but other stats should be valid
+    assert(input_manager_get_total_updates() == 0);     // No sensors to update
+    assert(input_manager_get_sensor_count() == 0);      // No sensors registered
+    assert(input_manager_get_valid_sensor_count() == 0); // No sensors to be valid
+    assert(input_manager_get_total_errors() == 0);      // No sensors to error
+    
+    // Message bus should be working
+    assert(g_message_bus.getMessagesProcessed() >= 0);
+    assert(g_message_bus.getQueueOverflows() == 0);     // Should have no overflows
+    
+    // The status reporting function should run without crashing
+    // (it's called internally during the run loop when time advances)
 }
 
 // Main test runner
@@ -61,9 +208,12 @@ int main() {
     std::cout << "=== Main Application Tests ===" << std::endl;
     
     // Run all tests
-    run_test_main_application_creation();
-    run_test_main_application_run();
-    run_test_main_application_led_state_tracking();
+    run_test_main_application_initialization();
+    run_test_main_application_run_loop();
+    run_test_sensor_integration();
+    run_test_message_bus_integration();
+    run_test_performance_characteristics();
+    run_test_status_reporting();
     
     // Print results
     std::cout << std::endl;

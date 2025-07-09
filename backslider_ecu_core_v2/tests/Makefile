@@ -5,8 +5,11 @@ CXXFLAGS = -std=c++11 -Wall -I.. -I. -DTESTING
 # Source files from parent directory
 ECU_SOURCES = ../main_application.cpp
 
-# Test module directories
-TEST_MODULES = main_application message_bus fuel_module ignition_module sensors
+# Mock Arduino sources for desktop testing
+MOCK_SOURCES = mock_arduino.cpp
+
+# Test module directories (added input_manager)
+TEST_MODULES = main_application message_bus fuel_module ignition_module sensors input_manager
 
 # Find all test files in module directories
 TEST_FILES = $(wildcard */test_*.cpp)
@@ -28,8 +31,8 @@ $(ECU_SOURCES) $(wildcard ../*$(1)*.cpp)
 endef
 
 # Specific rules for modules that need additional sources
-main_application/test_%: main_application/test_%.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $< $(ECU_SOURCES)
+main_application/test_main_application: main_application/test_main_application.cpp ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
 
 fuel_module/test_%: fuel_module/test_%.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $< ../mod_fuel.cpp $(ECU_SOURCES)
@@ -42,6 +45,10 @@ sensors/test_%: sensors/test_%.cpp
 
 message_bus/test_message_bus: message_bus/test_message_bus.cpp ../msg_bus.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp
+
+# Input manager tests need msg_bus, input_manager, sensor_calibration, and mock_arduino
+input_manager/test_%: input_manager/test_%.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
 
 # Run all tests in a specific module
 run-main: $(wildcard main_application/test_*)
@@ -62,6 +69,10 @@ run-ignition: $(wildcard ignition_module/test_*)
 
 run-sensors: $(wildcard sensors/test_*)
 	@echo "=== Running Sensor Tests ==="
+	@for test in $^; do echo "Running $$test..."; ./$$test || exit 1; done
+
+run-input-manager: $(wildcard input_manager/test_*)
+	@echo "=== Running Input Manager Tests ==="
 	@for test in $^; do echo "Running $$test..."; ./$$test || exit 1; done
 
 # Run all tests
@@ -95,14 +106,15 @@ setup-dirs:
 # Help target
 help:
 	@echo "Available targets:"
-	@echo "  all           - Build all test executables"
-	@echo "  test          - Run all test suites"
-	@echo "  run-main      - Run main application tests only"
-	@echo "  run-msg-bus   - Run message bus tests only"
-	@echo "  run-fuel      - Run fuel module tests only"
-	@echo "  run-ignition  - Run ignition module tests only"
-	@echo "  run-sensors   - Run sensor tests only"
-	@echo "  setup-dirs    - Create module directory structure"
-	@echo "  clean         - Remove all test executables"
+	@echo "  all              - Build all test executables"
+	@echo "  test             - Run all test suites"
+	@echo "  run-main         - Run main application tests only"
+	@echo "  run-msg-bus      - Run message bus tests only"
+	@echo "  run-fuel         - Run fuel module tests only"
+	@echo "  run-ignition     - Run ignition module tests only"
+	@echo "  run-sensors      - Run sensor tests only"
+	@echo "  run-input-manager - Run input manager tests only"
+	@echo "  setup-dirs       - Create module directory structure"
+	@echo "  clean            - Remove all test executables"
 
-.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors setup-dirs clean help
+.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors run-input-manager setup-dirs clean help
