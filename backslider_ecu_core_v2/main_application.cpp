@@ -11,6 +11,7 @@ extern MockSerial Serial;  // Use the Serial object from the test environment
 #include "main_application.h"
 #include "msg_bus.h"
 #include "input_manager.h"
+#include "transmission_module.h"
 // #include "engine_sensors.h"  // TODO: Create engine_sensors.h when ready
 // #include "transmission_sensors.h"  // TODO: Create transmission_sensors.h when ready
 
@@ -36,6 +37,13 @@ void MainApplication::init() {
     // Initialize input manager
     Serial.println("Initializing input manager...");
     input_manager_init();
+
+    // Initialize transmission module
+    Serial.println("Initializing transmission module...");
+    uint8_t trans_sensors_registered = transmission_module_init();
+    Serial.print("Registered ");
+    Serial.print(trans_sensors_registered);
+    Serial.println(" transmission sensors");
     
     // TODO: Register engine sensors when engine_sensors.h is created
     // Serial.println("Registering engine sensors...");
@@ -63,6 +71,9 @@ void MainApplication::run() {
     
     // Process message bus (route sensor data to modules)
     g_message_bus.process();
+
+    // Update transmission module
+    transmission_module_update();
     
     // TODO: Add other module updates here as they're developed
     // fuel_module_update();
@@ -116,6 +127,15 @@ void MainApplication::printStatusReport() {
     Serial.println(input_manager_get_total_updates());
     Serial.print("Sensor errors: ");
     Serial.println(input_manager_get_total_errors());
+
+    // Transmission statistics
+    Serial.print("Current gear: ");
+    Serial.println(transmission_gear_to_string(transmission_get_state()->current_gear));
+    Serial.print("Fluid temperature: ");
+    Serial.print(transmission_get_state()->fluid_temperature);
+    Serial.println("°C");
+    Serial.print("Transmission shifts: ");
+    Serial.println(transmission_get_shift_count());
     
     Serial.println("========================");
 }

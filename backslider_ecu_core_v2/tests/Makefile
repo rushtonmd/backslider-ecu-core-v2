@@ -31,8 +31,10 @@ $(ECU_SOURCES) $(wildcard ../*$(1)*.cpp)
 endef
 
 # Specific rules for modules that need additional sources
-main_application/test_main_application: main_application/test_main_application.cpp ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
-	$(CXX) $(CXXFLAGS) -o $@ $< ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
+
+# Main application now includes transmission module dependencies
+main_application/test_main_application: main_application/test_main_application.cpp ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp $(MOCK_SOURCES)
 
 fuel_module/test_%: fuel_module/test_%.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $< ../mod_fuel.cpp $(ECU_SOURCES)
