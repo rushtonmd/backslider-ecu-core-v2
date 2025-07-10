@@ -89,6 +89,12 @@ inline void mock_advance_time_us(uint32_t us) {
 // Mock ADC values for testing
 extern uint16_t mock_analog_values[42];  // Enough for all pins
 
+// Mock digital values for testing
+extern uint8_t mock_digital_values[56];  // Teensy 4.1 has pins 0-55
+
+// Mock pin modes for testing
+extern uint8_t mock_pin_modes[56];
+
 inline uint16_t analogRead(int pin) {
     if (pin >= 0 && pin < 42) {
         return mock_analog_values[pin];
@@ -97,20 +103,27 @@ inline uint16_t analogRead(int pin) {
 }
 
 inline int digitalRead(int pin) {
-    // Simple mock - return HIGH for even pins, LOW for odd
-    return (pin % 2) ? LOW : HIGH;
+    if (pin >= 0 && pin < 56) {
+        return mock_digital_values[pin];
+    }
+    return HIGH;  // Default to HIGH
 }
 
 inline void pinMode(int pin, int mode) {
-    // Mock function - does nothing in simulation
-    (void)pin;
-    (void)mode;
+    if (pin >= 0 && pin < 56) {
+        mock_pin_modes[pin] = mode;
+        
+        // If setting INPUT_PULLUP, default the pin to HIGH
+        if (mode == INPUT_PULLUP) {
+            mock_digital_values[pin] = HIGH;
+        }
+    }
 }
 
 inline void digitalWrite(int pin, int value) {
-    // Mock function - does nothing in simulation
-    (void)pin;
-    (void)value;
+    if (pin >= 0 && pin < 56) {
+        mock_digital_values[pin] = value ? HIGH : LOW;
+    }
 }
 
 // =============================================================================
@@ -232,6 +245,21 @@ inline void mock_set_analog_voltage(int pin, float voltage) {
     mock_set_analog_reading(pin, counts);
 }
 
+// Set mock digital value for a specific pin
+inline void mock_set_digital_value(int pin, int value) {
+    if (pin >= 0 && pin < 56) {
+        mock_digital_values[pin] = value ? HIGH : LOW;
+    }
+}
+
+// Get mock pin mode for a specific pin
+inline int mock_get_pin_mode(int pin) {
+    if (pin >= 0 && pin < 56) {
+        return mock_pin_modes[pin];
+    }
+    return INPUT;
+}
+
 // Reset all mock values to defaults
 inline void mock_reset_all() {
     mock_millis_time = 0;
@@ -240,6 +268,12 @@ inline void mock_reset_all() {
     // Set all analog pins to mid-range (1.65V)
     for (int i = 0; i < 42; i++) {
         mock_analog_values[i] = 2048;
+    }
+    
+    // Set all digital pins to HIGH (inactive for pullup inputs)
+    for (int i = 0; i < 56; i++) {
+        mock_digital_values[i] = HIGH;
+        mock_pin_modes[i] = INPUT;
     }
 }
 

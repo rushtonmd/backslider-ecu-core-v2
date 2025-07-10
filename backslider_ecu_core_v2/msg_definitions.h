@@ -65,6 +65,26 @@
 #define ERROR_IGNITION_FAULT    0x0010
 #define ERROR_FUEL_SYSTEM_FAULT 0x0020
 
+// =============================================================================
+// TRANSMISSION MESSAGE IDs
+// =============================================================================
+
+// Transmission sensor inputs (0x400-0x40F range to avoid conflicts)
+#define MSG_TRANS_FLUID_TEMP        0x400   // Transmission fluid temperature
+#define MSG_PADDLE_UPSHIFT          0x401   // Upshift paddle pressed
+#define MSG_PADDLE_DOWNSHIFT        0x402   // Downshift paddle pressed
+#define MSG_TRANS_PARK_SWITCH       0x403   // Park position switch
+#define MSG_TRANS_REVERSE_SWITCH    0x404   // Reverse position switch
+#define MSG_TRANS_NEUTRAL_SWITCH    0x405   // Neutral position switch
+#define MSG_TRANS_DRIVE_SWITCH      0x406   // Drive position switch
+#define MSG_TRANS_SECOND_SWITCH     0x407   // Second gear position switch
+#define MSG_TRANS_FIRST_SWITCH      0x408   // First gear position switch
+
+// Combined transmission state messages (0x410-0x41F range)
+#define MSG_TRANS_CURRENT_GEAR      0x410   // Current gear position
+#define MSG_TRANS_SHIFT_REQUEST     0x411   // Shift request (up/down)
+#define MSG_TRANS_STATE_VALID       0x412   // Transmission state validity
+
 // Helper macros for packing data into CAN messages
 #define MSG_PACK_FLOAT(msg, val) do { \
     float temp = (val); \

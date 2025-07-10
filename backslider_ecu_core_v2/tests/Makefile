@@ -8,8 +8,8 @@ ECU_SOURCES = ../main_application.cpp
 # Mock Arduino sources for desktop testing
 MOCK_SOURCES = mock_arduino.cpp
 
-# Test module directories (added input_manager)
-TEST_MODULES = main_application message_bus fuel_module ignition_module sensors input_manager
+# Test module directories
+TEST_MODULES = main_application message_bus fuel_module ignition_module sensors input_manager transmission_module
 
 # Find all test files in module directories
 TEST_FILES = $(wildcard */test_*.cpp)
@@ -47,8 +47,16 @@ message_bus/test_message_bus: message_bus/test_message_bus.cpp ../msg_bus.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp
 
 # Input manager tests need msg_bus, input_manager, sensor_calibration, and mock_arduino
-input_manager/test_%: input_manager/test_%.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
+input_manager/test_input_manager: input_manager/test_input_manager.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
+
+# Thermistor table generator test needs sensor_calibration, thermistor_table_generator, and mock_arduino
+input_manager/test_thermistor_table_generator: input_manager/test_thermistor_table_generator.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../sensor_calibration.cpp ../thermistor_table_generator.cpp $(MOCK_SOURCES)
+
+# Transmission module tests need all sensor components plus transmission module
+transmission_module/test_%: transmission_module/test_%.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp mock_arduino.cpp
+	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp mock_arduino.cpp
 
 # Run all tests in a specific module
 run-main: $(wildcard main_application/test_*)
@@ -73,7 +81,11 @@ run-sensors: $(wildcard sensors/test_*)
 
 run-input-manager: $(wildcard input_manager/test_*)
 	@echo "=== Running Input Manager Tests ==="
-	@for test in $^; do echo "Running $$test..."; ./$$test || exit 1; done
+	@for test in $^; do echo "Running $test..."; ./$test || exit 1; done
+
+run-transmission: $(wildcard transmission_module/test_*)
+	@echo "=== Running Transmission Module Tests ==="
+	@for test in $^; do echo "Running $test..."; ./$test || exit 1; done
 
 # Run all tests
 test: $(TEST_TARGETS)
@@ -113,8 +125,9 @@ help:
 	@echo "  run-fuel         - Run fuel module tests only"
 	@echo "  run-ignition     - Run ignition module tests only"
 	@echo "  run-sensors      - Run sensor tests only"
-	@echo "  run-input-manager - Run input manager tests only"
+	@echo "  run-input-manager    - Run input manager tests only"
+	@echo "  run-transmission     - Run transmission module tests only"
 	@echo "  setup-dirs       - Create module directory structure"
 	@echo "  clean            - Remove all test executables"
 
-.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors run-input-manager setup-dirs clean help
+.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors run-input-manager run-transmission setup-dirs clean help

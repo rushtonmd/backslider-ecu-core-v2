@@ -66,17 +66,24 @@
 #define PIN_KNOCK_2            8     // Knock Sensor #2
 
 // =============================================================================
-// TRANSMISSION SELECTOR INPUTS (Digital)
+// TRANSMISSION INPUTS (Digital and Analog)
 // =============================================================================
+
+// Paddle shifter inputs (manual shifting)
+#define PIN_PADDLE_UPSHIFT     16    // Upshift paddle (momentary, ground trigger)
+#define PIN_PADDLE_DOWNSHIFT   17    // Downshift paddle (momentary, ground trigger)
 
 // Automatic transmission gear selector inputs
 // These read the transmission gear selector switch positions
-#define PIN_TRANS_PARK         22    // Park position switch
-#define PIN_TRANS_REVERSE      23    // Reverse position switch  
-#define PIN_TRANS_NEUTRAL      24    // Neutral position switch
-#define PIN_TRANS_DRIVE        25    // Drive position switch
-#define PIN_TRANS_SPORT        26    // Sport mode switch
-#define PIN_TRANS_MANUAL       27    // Manual mode switch
+#define PIN_TRANS_PARK         22    // Park position switch (ground trigger)
+#define PIN_TRANS_REVERSE      23    // Reverse position switch (ground trigger)
+#define PIN_TRANS_NEUTRAL      24    // Neutral position switch (ground trigger)
+#define PIN_TRANS_DRIVE        25    // Drive position switch (ground trigger)
+#define PIN_TRANS_SECOND       26    // Second gear position switch (ground trigger)
+#define PIN_TRANS_FIRST        27    // First gear position switch (ground trigger)
+
+// Note: Removed PIN_TRANS_SPORT and PIN_TRANS_MANUAL to make room for
+// PIN_TRANS_SECOND and PIN_TRANS_FIRST for proper 6-position gear selector
 
 // =============================================================================
 // ENGINE CONTROL OUTPUTS (PWM/Digital)
@@ -174,7 +181,7 @@
 ANALOG PINS USAGE:
 A0-A5:   Primary engine sensors (TPS, MAP, MAF, CTS, IAT, Battery)
 A6-A12:  Secondary engine sensors (Oil, Fuel, Boost, EGT, Lambda)
-A13-A16: Transmission sensors (Temp, Speeds, Pressure)
+A13-A16: Transmission sensors (Temp, Input Speed, Output Speed, Line Pressure)
 A17:     Ambient temperature
 
 DIGITAL PINS USAGE:
@@ -184,8 +191,11 @@ DIGITAL PINS USAGE:
 6-8:     Speed and knock sensors
 9-12:    Ignition outputs 5-8 (V8 configuration)
 13:      Built-in status LED
+14-15:   Analog inputs A0-A1 (TPS, MAP)
+16-17:   Paddle shifter inputs (upshift/downshift)
+18-19:   Analog inputs A2-A3 (MAF, CTS)
 20-21:   Cam position sensors
-22-27:   Transmission selector switches
+22-27:   Transmission gear selector switches (P,R,N,D,2,1)
 28-35:   Fuel injection (8 cylinders) and ignition 1-4
 36-39:   Ignition outputs 1-4 (V8 configuration)
 40-45:   Transmission control outputs
@@ -198,11 +208,18 @@ Ignition:   Pins 36-39, 9-12 (8 coils)
   - Can support coil-on-plug or wasted spark configurations
   - Firing order can be configured in software
 
+TRANSMISSION CONFIGURATION:
+Inputs:     A13 (fluid temp), 16-17 (paddles), 22-27 (gear selector)
+Outputs:    40-45 (solenoid control)
+  - Supports 6-position gear selector: Park, Reverse, Neutral, Drive, Second, First
+  - Manual paddle shifting via pins 16-17
+  - Fluid temperature monitoring via thermistor on A13
+
 INTERRUPT PRIORITIES (suggested):
 Highest: Crank position sensors (2, 3, 5)
 High:    Cam position sensors (20, 21)
 Medium:  Knock sensors (7, 8)
-Low:     Vehicle speed (6)
+Low:     Vehicle speed (6), Paddle shifters (16, 17)
 */
 
 #endif
