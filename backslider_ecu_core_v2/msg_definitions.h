@@ -35,7 +35,6 @@
 #define MSG_FUEL_PULSE_WIDTH    0x101    // Injection time (float, ms)
 #define MSG_IDLE_TARGET_RPM     0x102    // Target idle (uint16_t, RPM)
 #define MSG_BOOST_TARGET        0x103    // Boost target (float, kPa)
-#define MSG_FAN_CONTROL         0x104    // Cooling fan (uint8_t, 0-255)
 
 // Low Priority: Status/diagnostics (0x200-0x2FF)
 #define MSG_COOLANT_TEMP        0x200    // Coolant temp (float, °C)
@@ -84,6 +83,55 @@
 #define MSG_TRANS_CURRENT_GEAR      0x410   // Current gear position
 #define MSG_TRANS_SHIFT_REQUEST     0x411   // Shift request (up/down)
 #define MSG_TRANS_STATE_VALID       0x412   // Transmission state validity
+
+// =============================================================================
+// OUTPUT CONTROL MESSAGE IDs
+// =============================================================================
+
+// Engine output controls (0x500-0x50F range)
+#define MSG_IGNITION_COIL_1         0x500   // Ignition coil 1 control
+#define MSG_IGNITION_COIL_2         0x501   // Ignition coil 2 control
+#define MSG_IGNITION_COIL_3         0x502   // Ignition coil 3 control
+#define MSG_IGNITION_COIL_4         0x503   // Ignition coil 4 control
+#define MSG_IGNITION_COIL_5         0x504   // Ignition coil 5 control
+#define MSG_IGNITION_COIL_6         0x505   // Ignition coil 6 control
+#define MSG_IGNITION_COIL_7         0x506   // Ignition coil 7 control
+#define MSG_IGNITION_COIL_8         0x507   // Ignition coil 8 control
+#define MSG_FUEL_INJECTOR_1         0x508   // Fuel injector 1 control
+#define MSG_FUEL_INJECTOR_2         0x509   // Fuel injector 2 control
+#define MSG_FUEL_INJECTOR_3         0x50A   // Fuel injector 3 control
+#define MSG_FUEL_INJECTOR_4         0x50B   // Fuel injector 4 control
+#define MSG_FUEL_INJECTOR_5         0x50C   // Fuel injector 5 control
+#define MSG_FUEL_INJECTOR_6         0x50D   // Fuel injector 6 control
+#define MSG_FUEL_INJECTOR_7         0x50E   // Fuel injector 7 control
+#define MSG_FUEL_INJECTOR_8         0x50F   // Fuel injector 8 control
+
+// Transmission output controls (0x510-0x51F range)
+#define MSG_TRANS_SHIFT_SOL_1       0x510   // Shift solenoid 1 control
+#define MSG_TRANS_SHIFT_SOL_2       0x511   // Shift solenoid 2 control
+#define MSG_TRANS_SHIFT_SOL_3       0x512   // Shift solenoid 3 control
+#define MSG_TRANS_SHIFT_SOL_4       0x513   // Shift solenoid 4 control
+#define MSG_TRANS_PRESSURE_SOL      0x514   // Line pressure solenoid control
+#define MSG_TRANS_TCC_SOL           0x515   // TCC solenoid control
+
+// Auxiliary output controls (0x520-0x52F range)
+#define MSG_IDLE_VALVE_CONTROL      0x520   // Idle air control valve
+#define MSG_FUEL_PUMP_CONTROL       0x521   // Fuel pump relay control
+#define MSG_FAN_CONTROL             0x522   // Cooling fan control
+#define MSG_A_C_CLUTCH_CONTROL      0x523   // A/C compressor clutch
+#define MSG_ALTERNATOR_FIELD        0x524   // Alternator field control
+#define MSG_BOOST_CONTROL           0x525   // Boost control solenoid
+#define MSG_WASTEGATE_CONTROL       0x526   // Wastegate control
+#define MSG_SHIFT_LIGHT             0x527   // Shift light control
+#define MSG_STATUS_LED              0x528   // Status LED control
+
+// Gauge output controls (0x530-0x53F range)
+#define MSG_BOOST_GAUGE             0x530   // Boost gauge output
+#define MSG_TEMP_GAUGE              0x531   // Temperature gauge output
+#define MSG_FUEL_GAUGE              0x532   // Fuel level gauge output
+#define MSG_OIL_PRESSURE_GAUGE      0x533   // Oil pressure gauge output
+#define MSG_TACH_OUTPUT             0x534   // Tachometer output
+#define MSG_SPEEDO_OUTPUT           0x535   // Speedometer output
 
 // Helper macros for packing data into CAN messages
 #define MSG_PACK_FLOAT(msg, val) do { \

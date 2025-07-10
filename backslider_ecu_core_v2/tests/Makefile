@@ -9,7 +9,7 @@ ECU_SOURCES = ../main_application.cpp
 MOCK_SOURCES = mock_arduino.cpp
 
 # Test module directories
-TEST_MODULES = main_application message_bus fuel_module ignition_module sensors input_manager transmission_module
+TEST_MODULES = main_application message_bus fuel_module ignition_module sensors input_manager transmission_module output_manager
 
 # Find all test files in module directories
 TEST_FILES = $(wildcard */test_*.cpp)
@@ -60,6 +60,10 @@ input_manager/test_thermistor_table_generator: input_manager/test_thermistor_tab
 transmission_module/test_%: transmission_module/test_%.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp mock_arduino.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp mock_arduino.cpp
 
+# Output manager tests need msg_bus, output_manager, and mock_arduino
+output_manager/test_output_manager: output_manager/test_output_manager.cpp ../msg_bus.cpp ../output_manager.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../output_manager.cpp $(MOCK_SOURCES)
+
 # Run all tests in a specific module
 run-main: $(wildcard main_application/test_*)
 	@echo "=== Running Main Application Tests ==="
@@ -87,6 +91,10 @@ run-input-manager: $(wildcard input_manager/test_*)
 
 run-transmission: $(wildcard transmission_module/test_*)
 	@echo "=== Running Transmission Module Tests ==="
+	@for test in $^; do echo "Running $test..."; ./$test || exit 1; done
+
+run-output-manager: $(wildcard output_manager/test_*)
+	@echo "=== Running Output Manager Tests ==="
 	@for test in $^; do echo "Running $test..."; ./$test || exit 1; done
 
 # Run all tests
@@ -129,7 +137,8 @@ help:
 	@echo "  run-sensors      - Run sensor tests only"
 	@echo "  run-input-manager    - Run input manager tests only"
 	@echo "  run-transmission     - Run transmission module tests only"
+	@echo "  run-output-manager   - Run output manager tests only"
 	@echo "  setup-dirs       - Create module directory structure"
 	@echo "  clean            - Remove all test executables"
 
-.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors run-input-manager run-transmission setup-dirs clean help
+.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors run-input-manager run-transmission run-output-manager setup-dirs clean help
