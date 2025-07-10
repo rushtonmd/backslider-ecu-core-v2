@@ -86,8 +86,9 @@ void fresh_system_setup() {
     test_setup();
     
     // Create fresh instances
-    g_message_bus.init(false);  // This should reset subscribers
-    input_manager_init();       // This should reset sensors
+    g_message_bus.resetSubscribers();  // Reset subscribers first
+    g_message_bus.init(false);
+    input_manager_init();
 }
 
 // Test basic transmission module initialization
@@ -141,45 +142,23 @@ TEST(digital_sensor_basic_test) {
     
     // Register just this one sensor
     uint8_t registered = input_manager_register_sensors(&test_digital_sensor, 1);
-    std::cout << "Registered sensors: " << (int)registered << std::endl;
-    std::cout << "Total sensor count: " << (int)input_manager_get_sensor_count() << std::endl;
+    assert(registered == 1);
     
     // Subscribe to the message
     park_message_received = false;
     park_switch_value = 0.0f;
     g_message_bus.subscribe(MSG_TRANS_PARK_SWITCH, test_park_switch_handler);
     
-    // Set the digital pin
-    mock_set_digital_value(22, 0);  // Active (should be inverted to true)
-    std::cout << "Set pin 22 to 0, digitalRead(22) = " << digitalRead(22) << std::endl;
+    // Set the digital pin active (low for inverted logic)
+    mock_set_digital_value(22, 0);
     
     // Update sensor
     input_manager_update();
     g_message_bus.process();
     
-    // Check sensor status
-    int8_t sensor_index = input_manager_find_sensor_by_msg_id(MSG_TRANS_PARK_SWITCH);
-    std::cout << "Sensor index: " << (int)sensor_index << std::endl;
-    
-    if (sensor_index >= 0) {
-        sensor_runtime_t status;
-        if (input_manager_get_sensor_status(sensor_index, &status)) {
-            std::cout << "After update:" << std::endl;
-            std::cout << "  raw_counts: " << status.raw_counts << std::endl;
-            std::cout << "  raw_voltage: " << status.raw_voltage << std::endl;
-            std::cout << "  calibrated_value: " << status.calibrated_value << std::endl;
-            std::cout << "  is_valid: " << (status.is_valid ? "true" : "false") << std::endl;
-            std::cout << "  update_count: " << status.update_count << std::endl;
-            std::cout << "  error_count: " << status.error_count << std::endl;
-        }
-    }
-    
-    std::cout << "Message received: " << (park_message_received ? "true" : "false") << std::endl;
-    if (park_message_received) {
-        std::cout << "Message value: " << park_switch_value << std::endl;
-    }
-    
-    std::cout << "Valid sensor count: " << (int)input_manager_get_valid_sensor_count() << std::endl;
+    // Check that message was received
+    assert(park_message_received == true);
+    assert(park_switch_value > 0.5f);  // Should be high (inverted from low input)
 }
 
 // Test gear position detection (simplified)
@@ -187,7 +166,6 @@ TEST(gear_position_detection) {
     fresh_system_setup();
     
     uint8_t registered = transmission_module_init();
-    
     assert(registered == 9);  // Should register 9 sensors
     
     const transmission_state_t* state = transmission_get_state();
@@ -234,13 +212,24 @@ TEST(paddle_shifter_debouncing) {
 TEST(fluid_temperature_monitoring) {
     fresh_system_setup();
     
-    transmission_module_init();
+    uint8_t registered = transmission_module_init();
+    assert(registered == 9);
     
     // Subscribe to temperature messages
     g_message_bus.subscribe(MSG_TRANS_FLUID_TEMP, test_message_handler);
     
-    // Set a specific temperature voltage
+    // Reset message handler state
+    message_received = false;
+    received_msg_id = 0;
+    received_value = 0.0f;
+    
+    // Set voltage
     mock_set_analog_voltage(PIN_TRANS_FLUID_TEMP, 2.0f);
+    
+    // IMPORTANT: Advance time AFTER all initialization is complete
+    std::cout << "DEBUG: Before advance, micros() = " << micros() << std::endl;
+    mock_advance_time_ms(150);  // 150ms > 100ms update interval
+    std::cout << "DEBUG: After advance, micros() = " << micros() << std::endl;
     
     // Process sensor updates
     input_manager_update();
@@ -249,22 +238,25 @@ TEST(fluid_temperature_monitoring) {
     // Check that temperature message was received
     assert(message_received == true);
     assert(received_msg_id == MSG_TRANS_FLUID_TEMP);
-    
-    // Temperature should be reasonable (between -30°C and 140°C)
     assert(received_value >= -30.0f && received_value <= 140.0f);
     
-    // Test overheating detection
+    // Test overheating detection with reasonable thresholds
     const transmission_state_t* state = transmission_get_state();
-    // The actual temperature depends on the generated lookup table
-    // but we can test the overheating function
-    bool is_overheating_120 = transmission_is_overheating(120.0f);
-    bool is_overheating_low = transmission_is_overheating(-50.0f);
     
-    // Should not be overheating at low threshold, might be at high threshold
-    assert(is_overheating_low == false);
+    // Test with high temperature threshold (should NOT be overheating)
+    bool is_overheating_100 = transmission_is_overheating(100.0f);  // 100°C threshold
+    bool is_overheating_50 = transmission_is_overheating(50.0f);    // 50°C threshold
+    
+    // Current temp is -30°C, so it should NOT be overheating at any reasonable threshold
+    assert(is_overheating_100 == false);  // -30°C is not > 100°C
+    assert(is_overheating_50 == false);   // -30°C is not > 50°C
+    
+    // Test with a threshold below current temp (should be overheating)
+    bool is_overheating_below = transmission_is_overheating(-40.0f);  // -40°C threshold
+    assert(is_overheating_below == true);  // -30°C is > -40°C (warmer than -40°C)
+    
     // Use the variables to avoid warnings
     (void)state;
-    (void)is_overheating_120;
 }
 
 // Test configuration functions
@@ -298,11 +290,8 @@ TEST(utility_functions) {
 
 // Test statistics and diagnostics
 TEST(statistics_and_diagnostics) {
-    test_setup();
+    fresh_system_setup();
     
-    // Initialize systems
-    g_message_bus.init(false);
-    input_manager_init();
     transmission_module_init();
     
     // Reset statistics
@@ -317,15 +306,17 @@ TEST(statistics_and_diagnostics) {
 
 // Test message publishing
 TEST(message_publishing) {
-    test_setup();
+    fresh_system_setup();
     
-    // Initialize systems
-    g_message_bus.init(false);
-    input_manager_init();
     transmission_module_init();
     
     // Subscribe to transmission state messages
     g_message_bus.subscribe(MSG_TRANS_CURRENT_GEAR, test_message_handler);
+    
+    // Reset message handler state
+    message_received = false;
+    received_msg_id = 0;
+    received_value = 0.0f;
     
     // Update transmission module (should publish state)
     transmission_module_update();
@@ -350,29 +341,37 @@ int main() {
     run_test_digital_sensor_basic_test();
     
     // Run tests that use the full transmission module (9 subscriptions each)
-    // These will hit the subscriber limit after a few tests, but we'll get some coverage
+    // Reset subscribers before each test to avoid hitting the limit
+    g_message_bus.resetSubscribers();
     run_test_transmission_module_initialization();
+    
+    g_message_bus.resetSubscribers();
     run_test_thermistor_table_generation();
+    
+    g_message_bus.resetSubscribers();
     run_test_gear_position_detection();
     
-    // Skip the tests that would exceed subscriber limits for now
-    // TODO: Fix message bus to properly reset subscribers
-    std::cout << "  SKIPPING remaining tests due to message bus subscriber limit" << std::endl;
-    std::cout << "  (This is a test infrastructure issue, not a transmission module issue)" << std::endl;
+    g_message_bus.resetSubscribers();
+    run_test_invalid_gear_position_handling();
     
-    // run_test_invalid_gear_position_handling();
-    // run_test_paddle_shifter_debouncing();
-    // run_test_fluid_temperature_monitoring();
-    // run_test_statistics_and_diagnostics();
-    // run_test_message_publishing();
+    g_message_bus.resetSubscribers();
+    run_test_paddle_shifter_debouncing();
+    
+    g_message_bus.resetSubscribers();
+    run_test_fluid_temperature_monitoring();
+    
+    g_message_bus.resetSubscribers();
+    run_test_statistics_and_diagnostics();
+    
+    g_message_bus.resetSubscribers();
+    run_test_message_publishing();
     
     // Print results
     std::cout << std::endl;
     std::cout << "Transmission Module Tests - Run: " << tests_run << ", Passed: " << tests_passed << std::endl;
     
     if (tests_passed == tests_run) {
-        std::cout << "✅ CORE TRANSMISSION MODULE TESTS PASSED!" << std::endl;
-        std::cout << "Note: Some tests skipped due to message bus subscriber limits" << std::endl;
+        std::cout << "✅ ALL TRANSMISSION MODULE TESTS PASSED!" << std::endl;
         return 0;
     } else {
         std::cout << "❌ SOME TRANSMISSION MODULE TESTS FAILED!" << std::endl;

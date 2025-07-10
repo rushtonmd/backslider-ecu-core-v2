@@ -128,7 +128,7 @@
 class MessageBus {
 public:
     // Configuration constants
-    static const uint8_t MAX_SUBSCRIBERS = 32;
+    static const uint8_t MAX_SUBSCRIBERS = 32;  // Increased for comprehensive ECU module support
     static const uint16_t INTERNAL_QUEUE_SIZE = 128;
     
     // Constructor
@@ -165,6 +165,9 @@ public:
     
     // Reset statistics
     void resetStatistics();
+
+    // Reset subscribers (for testing)
+    void resetSubscribers();
 
 private:
     // Subscriber management

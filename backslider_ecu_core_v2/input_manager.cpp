@@ -97,14 +97,43 @@ uint8_t input_manager_register_sensors(const sensor_definition_t* new_sensors, u
 void input_manager_update(void) {
     uint32_t now_us = micros();
     
+    // Remove these debug lines:
+    // #ifndef ARDUINO
+    // std::cout << "DEBUG: input_manager_update() starting, current time: " << now_us << "us" << std::endl;
+    // std::cout << "DEBUG: Processing " << (int)sensor_count << " sensors" << std::endl;
+    // #endif
+    
     // Update each sensor on its own schedule
     for (uint8_t i = 0; i < sensor_count; i++) {
-        if (now_us - sensor_runtime[i].last_update_us >= sensors[i].update_interval_us) {
+        uint32_t time_since_last = now_us - sensor_runtime[i].last_update_us;
+        
+        // Remove these debug lines too:
+        // #ifndef ARDUINO
+        // std::cout << "DEBUG: Sensor " << (int)i << " - time since last: " << time_since_last 
+        //           << "us, interval: " << sensors[i].update_interval_us << "us" << std::endl;
+        // #endif
+        
+        if (time_since_last >= sensors[i].update_interval_us) {
+            // Remove debug line:
+            // #ifndef ARDUINO
+            // std::cout << "DEBUG: Updating sensor " << (int)i << " (pin " << sensors[i].pin << ")" << std::endl;
+            // #endif
+            
             update_single_sensor(i);
             sensor_runtime[i].last_update_us = now_us;
             total_updates++;
+            
+            // Remove debug line:
+            // #ifndef ARDUINO
+            // std::cout << "DEBUG: Sensor " << (int)i << " updated, total_updates: " << total_updates << std::endl;
+            // #endif
         }
     }
+    
+    // Remove debug line:
+    // #ifndef ARDUINO
+    // std::cout << "DEBUG: input_manager_update() completed" << std::endl;
+    // #endif
 }
 
 // =============================================================================

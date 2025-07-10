@@ -183,6 +183,15 @@ void MessageBus::resetStatistics() {
     can_messages_sent = 0;
 }
 
+void MessageBus::resetSubscribers() {
+    subscriber_count = 0;
+    // Clear all subscriber entries
+    for (int i = 0; i < MAX_SUBSCRIBERS; i++) {
+        subscribers[i].msg_id = 0;
+        subscribers[i].handler = nullptr;
+    }
+}
+
 #ifdef ARDUINO
 void MessageBus::init_physical_can(uint32_t baud) {
     debug_print("MessageBus: Initializing physical CAN...");
