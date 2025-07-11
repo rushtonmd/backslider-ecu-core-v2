@@ -53,6 +53,9 @@ typedef struct {
     uint16_t pulses_per_unit;   // Pulses per revolution/unit
     float scaling_factor;       // Additional scaling factor
     uint32_t timeout_us;        // Timeout for zero reading
+    uint32_t message_update_rate_hz; // Rate to publish messages (much slower than interrupts)
+    uint8_t use_interrupts;     // 1 = use high-speed interrupts, 0 = use polling
+    uint8_t trigger_edge;       // 0=RISING, 1=FALLING, 2=CHANGE (interrupt mode only)
 } frequency_config_t;
 
 // Union for sensor-specific configuration
