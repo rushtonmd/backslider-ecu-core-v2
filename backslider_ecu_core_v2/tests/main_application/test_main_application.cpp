@@ -34,6 +34,9 @@ int tests_passed = 0;
 void test_setup() {
     mock_reset_all();
     
+    // Reset message bus subscribers to prevent "too many subscribers" errors
+    g_message_bus.resetSubscribers();
+    
     // Set some realistic sensor values for testing
     mock_set_analog_voltage(14, 2.5f);  // A0 (TPS) at 50%
     mock_set_analog_voltage(15, 1.5f);  // A1 (MAP)

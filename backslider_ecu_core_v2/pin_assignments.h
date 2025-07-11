@@ -163,13 +163,15 @@
 // PIN VALIDATION MACROS
 // =============================================================================
 
-// Validate that critical pins are interrupt-capable
+// Validate that critical pins are interrupt-capable (only in Arduino environment)
+#ifdef ARDUINO
 #if !defined(CORE_INT2_PIN) || (PIN_CRANK_PRIMARY != 2)
     #warning "PIN_CRANK_PRIMARY should be on interrupt-capable pin"
 #endif
 
 #if !defined(CORE_INT3_PIN) || (PIN_CRANK_SECONDARY != 3)
     #warning "PIN_CRANK_SECONDARY should be on interrupt-capable pin"
+#endif
 #endif
 
 // =============================================================================

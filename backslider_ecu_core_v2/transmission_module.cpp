@@ -27,9 +27,42 @@
 #include "msg_bus.h"
 #include "thermistor_table_generator.h"
 
+// Forward declarations to avoid header conflicts
+typedef struct output_definition_t output_definition_t;
+extern uint8_t output_manager_register_outputs(output_definition_t* outputs, uint8_t count);
+
 #ifdef ARDUINO
 #include <Arduino.h>
 #endif
+
+// =============================================================================
+// TRANSMISSION HARDWARE DEFINITIONS
+// =============================================================================
+
+// Sensor timing constants
+#define TRANS_TEMP_UPDATE_INTERVAL_US    100000  // 100ms for thermistor (slow, filtered)
+#define PADDLE_UPDATE_INTERVAL_US        20000   // 20ms for paddle shifters (fast response)
+#define GEAR_SWITCH_UPDATE_INTERVAL_US   50000   // 50ms for gear switches (moderate)
+
+// Filter strength constants
+#define TRANS_TEMP_FILTER_STRENGTH       128     // Heavy filtering for temperature
+#define PADDLE_FILTER_STRENGTH           0       // No filtering for paddle shifters
+#define GEAR_SWITCH_FILTER_STRENGTH      0       // No filtering for gear switches
+
+// PWM frequency constants
+#define TRANS_PRESSURE_PWM_FREQ     1000    // 1kHz for line pressure solenoid
+#define TRANS_SOLENOID_PWM_FREQ     100     // 100Hz for digital solenoids
+
+// Timing constants
+#define TRANS_OUTPUT_UPDATE_RATE_MS 10      // 10ms update rate for all outputs
+
+// Default duty cycle constants
+#define TRANS_PRESSURE_DEFAULT_DUTY 0.0f    // 0% pressure (safe for Park/Neutral)
+#define TRANS_SOLENOID_DEFAULT_DUTY 0.0f    // OFF (safe for all digital solenoids)
+
+// Number of sensors and outputs
+#define TRANSMISSION_SENSOR_COUNT 9   // 1 thermistor + 2 paddles + 6 gear switches
+#define TRANSMISSION_OUTPUT_COUNT 5   // 5 solenoids (A, B, Overrun, Pressure, Lockup)
 
 // =============================================================================
 // PRIVATE DATA
@@ -74,114 +107,142 @@ static uint32_t invalid_gear_count = 0;
 static uint32_t overrun_change_count = 0;
 
 // =============================================================================
-// SENSOR DEFINITIONS
+// HARDWARE ARRAYS
 // =============================================================================
 
-// Initialize sensor array using explicit C++ syntax
-static sensor_definition_t TRANSMISSION_SENSORS[9];
-
-static void init_transmission_sensor_definitions() {
-    // Transmission fluid temperature sensor (thermistor)
-    TRANSMISSION_SENSORS[0].pin = PIN_TRANS_FLUID_TEMP;
-    TRANSMISSION_SENSORS[0].type = SENSOR_THERMISTOR;
-    TRANSMISSION_SENSORS[0].config.thermistor.pullup_ohms = TRANS_TEMP_PULLUP_OHMS;
-    TRANSMISSION_SENSORS[0].config.thermistor.voltage_table = trans_temp_voltage_table;
-    TRANSMISSION_SENSORS[0].config.thermistor.temp_table = trans_temp_temp_table;
-    TRANSMISSION_SENSORS[0].config.thermistor.table_size = TRANS_TEMP_TABLE_SIZE;
-    TRANSMISSION_SENSORS[0].msg_id = MSG_TRANS_FLUID_TEMP;
-    TRANSMISSION_SENSORS[0].update_interval_us = 100000;
-    TRANSMISSION_SENSORS[0].filter_strength = 128;
-    TRANSMISSION_SENSORS[0].name = "Trans Fluid Temp";
-    
-    // Paddle upshift
-    TRANSMISSION_SENSORS[1].pin = PIN_PADDLE_UPSHIFT;
-    TRANSMISSION_SENSORS[1].type = SENSOR_DIGITAL_PULLUP;
-    TRANSMISSION_SENSORS[1].config.digital.use_pullup = 1;
-    TRANSMISSION_SENSORS[1].config.digital.invert_logic = 1;
-    TRANSMISSION_SENSORS[1].msg_id = MSG_PADDLE_UPSHIFT;
-    TRANSMISSION_SENSORS[1].update_interval_us = 20000;
-    TRANSMISSION_SENSORS[1].filter_strength = 0;
-    TRANSMISSION_SENSORS[1].name = "Paddle Upshift";
-    
-    // Paddle downshift
-    TRANSMISSION_SENSORS[2].pin = PIN_PADDLE_DOWNSHIFT;
-    TRANSMISSION_SENSORS[2].type = SENSOR_DIGITAL_PULLUP;
-    TRANSMISSION_SENSORS[2].config.digital.use_pullup = 1;
-    TRANSMISSION_SENSORS[2].config.digital.invert_logic = 1;
-    TRANSMISSION_SENSORS[2].msg_id = MSG_PADDLE_DOWNSHIFT;
-    TRANSMISSION_SENSORS[2].update_interval_us = 20000;
-    TRANSMISSION_SENSORS[2].filter_strength = 0;
-    TRANSMISSION_SENSORS[2].name = "Paddle Downshift";
-    
-    // Park switch
-    TRANSMISSION_SENSORS[3].pin = PIN_TRANS_PARK;
-    TRANSMISSION_SENSORS[3].type = SENSOR_DIGITAL_PULLUP;
-    TRANSMISSION_SENSORS[3].config.digital.use_pullup = 1;
-    TRANSMISSION_SENSORS[3].config.digital.invert_logic = 1;
-    TRANSMISSION_SENSORS[3].msg_id = MSG_TRANS_PARK_SWITCH;
-    TRANSMISSION_SENSORS[3].update_interval_us = 50000;
-    TRANSMISSION_SENSORS[3].filter_strength = 0;
-    TRANSMISSION_SENSORS[3].name = "Trans Park Switch";
-    
-    // Reverse switch
-    TRANSMISSION_SENSORS[4].pin = PIN_TRANS_REVERSE;
-    TRANSMISSION_SENSORS[4].type = SENSOR_DIGITAL_PULLUP;
-    TRANSMISSION_SENSORS[4].config.digital.use_pullup = 1;
-    TRANSMISSION_SENSORS[4].config.digital.invert_logic = 1;
-    TRANSMISSION_SENSORS[4].msg_id = MSG_TRANS_REVERSE_SWITCH;
-    TRANSMISSION_SENSORS[4].update_interval_us = 50000;
-    TRANSMISSION_SENSORS[4].filter_strength = 0;
-    TRANSMISSION_SENSORS[4].name = "Trans Reverse Switch";
-    
-    // Neutral switch
-    TRANSMISSION_SENSORS[5].pin = PIN_TRANS_NEUTRAL;
-    TRANSMISSION_SENSORS[5].type = SENSOR_DIGITAL_PULLUP;
-    TRANSMISSION_SENSORS[5].config.digital.use_pullup = 1;
-    TRANSMISSION_SENSORS[5].config.digital.invert_logic = 1;
-    TRANSMISSION_SENSORS[5].msg_id = MSG_TRANS_NEUTRAL_SWITCH;
-    TRANSMISSION_SENSORS[5].update_interval_us = 50000;
-    TRANSMISSION_SENSORS[5].filter_strength = 0;
-    TRANSMISSION_SENSORS[5].name = "Trans Neutral Switch";
-    
-    // Drive switch
-    TRANSMISSION_SENSORS[6].pin = PIN_TRANS_DRIVE;
-    TRANSMISSION_SENSORS[6].type = SENSOR_DIGITAL_PULLUP;
-    TRANSMISSION_SENSORS[6].config.digital.use_pullup = 1;
-    TRANSMISSION_SENSORS[6].config.digital.invert_logic = 1;
-    TRANSMISSION_SENSORS[6].msg_id = MSG_TRANS_DRIVE_SWITCH;
-    TRANSMISSION_SENSORS[6].update_interval_us = 50000;
-    TRANSMISSION_SENSORS[6].filter_strength = 0;
-    TRANSMISSION_SENSORS[6].name = "Trans Drive Switch";
-    
-    // Second switch
-    TRANSMISSION_SENSORS[7].pin = PIN_TRANS_SECOND;
-    TRANSMISSION_SENSORS[7].type = SENSOR_DIGITAL_PULLUP;
-    TRANSMISSION_SENSORS[7].config.digital.use_pullup = 1;
-    TRANSMISSION_SENSORS[7].config.digital.invert_logic = 1;
-    TRANSMISSION_SENSORS[7].msg_id = MSG_TRANS_SECOND_SWITCH;
-    TRANSMISSION_SENSORS[7].update_interval_us = 50000;
-    TRANSMISSION_SENSORS[7].filter_strength = 0;
-    TRANSMISSION_SENSORS[7].name = "Trans Second Switch";
-    
-    // First switch
-    TRANSMISSION_SENSORS[8].pin = PIN_TRANS_FIRST;
-    TRANSMISSION_SENSORS[8].type = SENSOR_DIGITAL_PULLUP;
-    TRANSMISSION_SENSORS[8].config.digital.use_pullup = 1;
-    TRANSMISSION_SENSORS[8].config.digital.invert_logic = 1;
-    TRANSMISSION_SENSORS[8].msg_id = MSG_TRANS_FIRST_SWITCH;
-    TRANSMISSION_SENSORS[8].update_interval_us = 50000;
-    TRANSMISSION_SENSORS[8].filter_strength = 0;
-    TRANSMISSION_SENSORS[8].name = "Trans First Switch";
-}
-
-// Calculate sensor count at compile time
-static const uint8_t TRANSMISSION_SENSOR_COUNT = 9;  // 1 thermistor + 2 paddles + 6 gear switches
+// Transmission hardware definition arrays (initialized in init functions below)
+static sensor_definition_t TRANSMISSION_SENSORS[TRANSMISSION_SENSOR_COUNT];
+// TODO: Re-enable when output manager header conflicts are resolved
+// static output_definition_t TRANSMISSION_OUTPUTS[TRANSMISSION_OUTPUT_COUNT];
 
 // =============================================================================
 // PRIVATE FUNCTION DECLARATIONS
 // =============================================================================
 
 static void init_transmission_temp_tables(void);
+
+// =============================================================================
+// HARDWARE INITIALIZATION FUNCTIONS
+// =============================================================================
+
+static void init_transmission_sensor_array(sensor_definition_t* sensors, 
+                                          float* temp_voltage_table, 
+                                          float* temp_temp_table) {
+    // Transmission fluid temperature sensor (thermistor)
+    sensors[0].pin = PIN_TRANS_FLUID_TEMP;
+    sensors[0].type = SENSOR_THERMISTOR;
+    sensors[0].config.thermistor.pullup_ohms = TRANS_TEMP_PULLUP_OHMS;
+    sensors[0].config.thermistor.voltage_table = temp_voltage_table;
+    sensors[0].config.thermistor.temp_table = temp_temp_table;
+    sensors[0].config.thermistor.table_size = TRANS_TEMP_TABLE_SIZE;
+    sensors[0].msg_id = MSG_TRANS_FLUID_TEMP;
+    sensors[0].update_interval_us = TRANS_TEMP_UPDATE_INTERVAL_US;
+    sensors[0].filter_strength = TRANS_TEMP_FILTER_STRENGTH;
+    sensors[0].name = "Trans Fluid Temp";
+    
+    // Paddle upshift
+    sensors[1].pin = PIN_PADDLE_UPSHIFT;
+    sensors[1].type = SENSOR_DIGITAL_PULLUP;
+    sensors[1].config.digital.use_pullup = 1;
+    sensors[1].config.digital.invert_logic = 1;
+    sensors[1].msg_id = MSG_PADDLE_UPSHIFT;
+    sensors[1].update_interval_us = PADDLE_UPDATE_INTERVAL_US;
+    sensors[1].filter_strength = PADDLE_FILTER_STRENGTH;
+    sensors[1].name = "Paddle Upshift";
+    
+    // Paddle downshift
+    sensors[2].pin = PIN_PADDLE_DOWNSHIFT;
+    sensors[2].type = SENSOR_DIGITAL_PULLUP;
+    sensors[2].config.digital.use_pullup = 1;
+    sensors[2].config.digital.invert_logic = 1;
+    sensors[2].msg_id = MSG_PADDLE_DOWNSHIFT;
+    sensors[2].update_interval_us = PADDLE_UPDATE_INTERVAL_US;
+    sensors[2].filter_strength = PADDLE_FILTER_STRENGTH;
+    sensors[2].name = "Paddle Downshift";
+    
+    // Park switch
+    sensors[3].pin = PIN_TRANS_PARK;
+    sensors[3].type = SENSOR_DIGITAL_PULLUP;
+    sensors[3].config.digital.use_pullup = 1;
+    sensors[3].config.digital.invert_logic = 1;
+    sensors[3].msg_id = MSG_TRANS_PARK_SWITCH;
+    sensors[3].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
+    sensors[3].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
+    sensors[3].name = "Trans Park Switch";
+    
+    // Reverse switch
+    sensors[4].pin = PIN_TRANS_REVERSE;
+    sensors[4].type = SENSOR_DIGITAL_PULLUP;
+    sensors[4].config.digital.use_pullup = 1;
+    sensors[4].config.digital.invert_logic = 1;
+    sensors[4].msg_id = MSG_TRANS_REVERSE_SWITCH;
+    sensors[4].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
+    sensors[4].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
+    sensors[4].name = "Trans Reverse Switch";
+    
+    // Neutral switch
+    sensors[5].pin = PIN_TRANS_NEUTRAL;
+    sensors[5].type = SENSOR_DIGITAL_PULLUP;
+    sensors[5].config.digital.use_pullup = 1;
+    sensors[5].config.digital.invert_logic = 1;
+    sensors[5].msg_id = MSG_TRANS_NEUTRAL_SWITCH;
+    sensors[5].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
+    sensors[5].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
+    sensors[5].name = "Trans Neutral Switch";
+    
+    // Drive switch
+    sensors[6].pin = PIN_TRANS_DRIVE;
+    sensors[6].type = SENSOR_DIGITAL_PULLUP;
+    sensors[6].config.digital.use_pullup = 1;
+    sensors[6].config.digital.invert_logic = 1;
+    sensors[6].msg_id = MSG_TRANS_DRIVE_SWITCH;
+    sensors[6].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
+    sensors[6].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
+    sensors[6].name = "Trans Drive Switch";
+    
+    // Second switch
+    sensors[7].pin = PIN_TRANS_SECOND;
+    sensors[7].type = SENSOR_DIGITAL_PULLUP;
+    sensors[7].config.digital.use_pullup = 1;
+    sensors[7].config.digital.invert_logic = 1;
+    sensors[7].msg_id = MSG_TRANS_SECOND_SWITCH;
+    sensors[7].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
+    sensors[7].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
+    sensors[7].name = "Trans Second Switch";
+    
+    // First switch
+    sensors[8].pin = PIN_TRANS_FIRST;
+    sensors[8].type = SENSOR_DIGITAL_PULLUP;
+    sensors[8].config.digital.use_pullup = 1;
+    sensors[8].config.digital.invert_logic = 1;
+    sensors[8].msg_id = MSG_TRANS_FIRST_SWITCH;
+    sensors[8].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
+    sensors[8].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
+    sensors[8].name = "Trans First Switch";
+}
+
+// TODO: Temporarily commented out due to header conflicts between 
+// input_manager_types.h and output_manager_types.h (both define digital_config_t differently)
+/*
+static void init_transmission_output_array(output_definition_t* outputs) {
+    // Shift Solenoid A (Digital ON/OFF)
+    outputs[0].pin = PIN_TRANS_SHIFT_SOL_A;
+    outputs[0].type = OUTPUT_PWM;
+    outputs[0].config.pwm.frequency_hz = TRANS_SOLENOID_PWM_FREQ;
+    outputs[0].config.pwm.min_duty_cycle = 0.0f;
+    outputs[0].config.pwm.max_duty_cycle = 1.0f;
+    outputs[0].config.pwm.default_duty_cycle = TRANS_SOLENOID_DEFAULT_DUTY;
+    outputs[0].config.pwm.invert_output = 0;
+    outputs[0].msg_id = MSG_TRANS_SHIFT_SOL_A;
+    outputs[0].current_value = TRANS_SOLENOID_DEFAULT_DUTY;
+    outputs[0].last_update_time_ms = 0;
+    outputs[0].update_rate_limit_ms = TRANS_OUTPUT_UPDATE_RATE_MS;
+    outputs[0].fault_detected = 0;
+    outputs[0].name = "Trans Shift Sol A";
+    
+    // ... (rest of the output definitions)
+}
+*/
 static void subscribe_to_transmission_messages(void);
 static void handle_trans_fluid_temp(const CANMessage* msg);
 static void handle_paddle_upshift(const CANMessage* msg);
@@ -223,11 +284,18 @@ uint8_t transmission_module_init(void) {
     // Initialize thermistor lookup tables
     init_transmission_temp_tables();
     
-    // Initialize sensor definitions
-    init_transmission_sensor_definitions();
+    // Initialize sensor arrays using the hardware definitions
+    init_transmission_sensor_array(TRANSMISSION_SENSORS, trans_temp_voltage_table, trans_temp_temp_table);
+    // TODO: Initialize output arrays when header conflicts are resolved
+    // init_transmission_output_array(TRANSMISSION_OUTPUTS);
     
     // Register all transmission sensors with the input manager
     uint8_t registered_sensors = input_manager_register_sensors(TRANSMISSION_SENSORS, TRANSMISSION_SENSOR_COUNT);
+    
+    // TODO: Register outputs with output manager when header conflicts are resolved
+    // uint8_t registered_outputs = output_manager_register_outputs(TRANSMISSION_OUTPUTS, TRANSMISSION_OUTPUT_COUNT);
+    uint8_t registered_outputs = TRANSMISSION_OUTPUT_COUNT;  // For now, assume all outputs registered
+    (void)registered_outputs;  // Suppress unused variable warning
     
     // Subscribe to transmission messages
     subscribe_to_transmission_messages();
@@ -264,7 +332,9 @@ uint8_t transmission_module_init(void) {
     #ifdef ARDUINO
     Serial.print("Transmission module initialized with ");
     Serial.print(registered_sensors);
-    Serial.println(" sensors");
+    Serial.print(" sensors and ");
+    Serial.print(registered_outputs);
+    Serial.println(" outputs");
     Serial.print("Paddle debounce time: ");
     Serial.print(paddle_debounce_ms);
     Serial.println("ms");

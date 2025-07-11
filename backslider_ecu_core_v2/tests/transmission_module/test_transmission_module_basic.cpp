@@ -498,6 +498,8 @@ TEST(paddle_shifting_drive_only) {
     
     const transmission_state_t* state = transmission_get_state();
     uint32_t initial_shift_count = transmission_get_shift_count();
+    (void)state;  // Suppress unused variable warning
+    (void)initial_shift_count;  // Suppress unused variable warning
     
     // Test paddle press in Park (paddle press registered but shift not executed)
     set_gear_position("P");
