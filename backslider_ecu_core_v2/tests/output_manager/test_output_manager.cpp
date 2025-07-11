@@ -103,7 +103,7 @@ TEST(pwm_output_registration) {
             .pin = 23,
             .type = OUTPUT_PWM,
             .config = {.pwm = {1000, 10, 0.0f, 1.0f, 0.5f, 0}},
-            .msg_id = MSG_TRANS_TCC_SOL,
+            .msg_id = MSG_TRANS_LOCKUP_SOL,
             .current_value = 0.0f,
             .last_update_time_ms = 0,
             .update_rate_limit_ms = 50,

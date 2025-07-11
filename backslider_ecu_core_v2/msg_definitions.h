@@ -29,6 +29,8 @@
 #define MSG_THROTTLE_POSITION   0x012    // Throttle % (float, 0-100)
 #define MSG_MANIFOLD_PRESSURE   0x013    // MAP (float, kPa)
 #define MSG_TIMING_TRIGGER      0x014    // Timing trigger event (uint8_t)
+#define MSG_VEHICLE_SPEED       0x015    // Vehicle speed (float, MPH)
+#define MSG_BRAKE_PEDAL         0x016    // Brake pedal state (float, 0=off 1=on)
 
 // Medium Priority: Control commands (0x100-0x1FF)
 #define MSG_IGNITION_TIMING     0x100    // Timing advance (float, degrees)
@@ -83,6 +85,8 @@
 #define MSG_TRANS_CURRENT_GEAR      0x410   // Current gear position
 #define MSG_TRANS_SHIFT_REQUEST     0x411   // Shift request (up/down)
 #define MSG_TRANS_STATE_VALID       0x412   // Transmission state validity
+#define MSG_TRANS_OVERRUN_STATE     0x413   // Current overrun clutch state (0=ENGAGED, 1=DISENGAGED)
+
 
 // =============================================================================
 // OUTPUT CONTROL MESSAGE IDs
@@ -107,12 +111,11 @@
 #define MSG_FUEL_INJECTOR_8         0x50F   // Fuel injector 8 control
 
 // Transmission output controls (0x510-0x51F range)
-#define MSG_TRANS_SHIFT_SOL_1       0x510   // Shift solenoid 1 control
-#define MSG_TRANS_SHIFT_SOL_2       0x511   // Shift solenoid 2 control
-#define MSG_TRANS_SHIFT_SOL_3       0x512   // Shift solenoid 3 control
-#define MSG_TRANS_SHIFT_SOL_4       0x513   // Shift solenoid 4 control
-#define MSG_TRANS_PRESSURE_SOL      0x514   // Line pressure solenoid control
-#define MSG_TRANS_TCC_SOL           0x515   // TCC solenoid control
+#define MSG_TRANS_SHIFT_SOL_A       0x510   // Shift Solenoid A control
+#define MSG_TRANS_SHIFT_SOL_B       0x511   // Shift Solenoid B control
+#define MSG_TRANS_OVERRUN_SOL       0x512   // Overrun solenoid control
+#define MSG_TRANS_PRESSURE_SOL      0x513   // Line pressure solenoid control (PWM)
+#define MSG_TRANS_LOCKUP_SOL        0x514   // Lockup solenoid control
 
 // Auxiliary output controls (0x520-0x52F range)
 #define MSG_IDLE_VALVE_CONTROL      0x520   // Idle air control valve

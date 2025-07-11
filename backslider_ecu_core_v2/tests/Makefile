@@ -56,6 +56,18 @@ input_manager/test_input_manager: input_manager/test_input_manager.cpp ../msg_bu
 input_manager/test_thermistor_table_generator: input_manager/test_thermistor_table_generator.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp $(MOCK_SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $< ../sensor_calibration.cpp ../thermistor_table_generator.cpp $(MOCK_SOURCES)
 
+# Digital sensor test needs msg_bus, input_manager, sensor_calibration, and mock_arduino
+input_manager/test_input_manager_digital_sensors: input_manager/test_input_manager_digital_sensors.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
+
+# Analog linear sensor test needs msg_bus, input_manager, sensor_calibration, and mock_arduino
+input_manager/test_input_manager_analog_linear_sensors: input_manager/test_input_manager_analog_linear_sensors.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
+
+# Thermistor sensor test needs msg_bus, input_manager, sensor_calibration, and mock_arduino
+input_manager/test_input_manager_thermistors: input_manager/test_input_manager_thermistors.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
+
 # Transmission module tests need all sensor components plus transmission module
 transmission_module/test_%: transmission_module/test_%.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp mock_arduino.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp mock_arduino.cpp

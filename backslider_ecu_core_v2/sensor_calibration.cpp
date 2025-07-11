@@ -83,8 +83,15 @@ float calibrate_thermistor(const thermistor_config_t* config, float voltage) {
 float calibrate_digital(const digital_config_t* config, uint8_t digital_value) {
     if (config == nullptr) return 0.0f;
     
-    // Simple conversion: 0 or 1 (could be expanded for more complex digital sensors)
-    return static_cast<float>(digital_value);
+    // Convert to 0 or 1 (normalize any non-zero value to 1)
+    uint8_t normalized_value = digital_value ? 1 : 0;
+    
+    // Apply inversion if configured
+    if (config->invert_logic) {
+        normalized_value = !normalized_value;
+    }
+    
+    return static_cast<float>(normalized_value);
 }
 
 float calibrate_frequency(const frequency_config_t* config, uint32_t frequency_hz) {

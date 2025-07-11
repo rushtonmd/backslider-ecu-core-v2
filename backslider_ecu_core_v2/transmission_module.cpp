@@ -1,5 +1,21 @@
 // transmission_module.cpp
-// Implementation of transmission control module
+// Implementation of transmission control module with race car overrun clutch control
+// Uses pure message bus architecture for all data exchange
+//
+// 5-Solenoid Transmission Control System:
+// - Shift Solenoid A (Pin 40): Digital ON/OFF
+// - Shift Solenoid B (Pin 41): Digital ON/OFF
+// - Overrun Solenoid (Pin 42): Digital ON/OFF (Race car logic implemented)
+// - Line Pressure Solenoid (Pin 43): PWM 0-100% (0% Park/Neutral, 100% all moving gears)
+// - Lockup Solenoid (Pin 44): Digital ON/OFF (automatic - ON in 4th gear only)
+//
+// Gear Patterns (A/B/Lockup/Pressure):
+// Park/Neutral: OFF/OFF/OFF/0%
+// Reverse: OFF/OFF/OFF/100%
+// Gear 1: ON/ON/OFF/100%
+// Gear 2: OFF/ON/OFF/100%
+// Gear 3: OFF/OFF/OFF/100%
+// Gear 4: ON/OFF/ON/100%  (Lockup engages for fuel efficiency)
 
 #ifndef ARDUINO
 // For desktop testing, include mock Arduino before anything else
@@ -26,12 +42,36 @@ static float trans_temp_temp_table[TRANS_TEMP_TABLE_SIZE];
 // Transmission state
 static transmission_state_t trans_state;
 
+// Current automatic gear when in Drive position (1-4)
+static uint8_t current_auto_gear = 1;  // Start in gear 1
+
 // Configuration
 static uint16_t paddle_debounce_ms = PADDLE_DEBOUNCE_MS;
+
+// Race car overrun clutch tuning parameters (adjustable for different tracks/drivers)
+static float overrun_throttle_disengage_threshold = OVERRUN_THROTTLE_DISENGAGE_THRESHOLD;
+static float overrun_throttle_engage_threshold = OVERRUN_THROTTLE_ENGAGE_THRESHOLD;
+static float overrun_minimum_speed_mph = OVERRUN_MINIMUM_SPEED_MPH;
+static float overrun_braking_speed_threshold = OVERRUN_BRAKING_SPEED_THRESHOLD;
+static float overrun_moderate_throttle_threshold = OVERRUN_MODERATE_THROTTLE_THRESHOLD;
+
+// External data caching for overrun control (from message bus)
+#define EXTERNAL_DATA_TIMEOUT_MS 500  // 500ms timeout for external data validity
+static float cached_throttle_position = 20.0f;  // Safe default
+static float cached_vehicle_speed = 35.0f;      // Safe default
+static bool cached_brake_active = false;        // Safe default
+static uint32_t last_throttle_update_ms = 0;
+static uint32_t last_speed_update_ms = 0;
+static uint32_t last_brake_update_ms = 0;
+
+// Overrun clutch override control (for testing/diagnostics)
+static bool overrun_manual_override_active = false;
+static overrun_clutch_state_t overrun_manual_override_state = OVERRUN_DISENGAGED;
 
 // Statistics
 static uint32_t shift_count = 0;
 static uint32_t invalid_gear_count = 0;
+static uint32_t overrun_change_count = 0;
 
 // =============================================================================
 // SENSOR DEFINITIONS
@@ -147,9 +187,29 @@ static void handle_trans_fluid_temp(const CANMessage* msg);
 static void handle_paddle_upshift(const CANMessage* msg);
 static void handle_paddle_downshift(const CANMessage* msg);
 static void handle_gear_position_switches(const CANMessage* msg);
+static void handle_throttle_position(const CANMessage* msg);
+static void handle_vehicle_speed(const CANMessage* msg);
+static void handle_brake_pedal(const CANMessage* msg);
 static void update_gear_position(void);
 static void process_shift_requests(void);
 static void publish_transmission_state(void);
+static bool is_shift_safe(void);
+static bool execute_upshift(void);
+static bool execute_downshift(void);
+static void set_shift_solenoid_pattern(uint8_t gear);
+static void set_line_pressure_for_gear(gear_position_t gear);
+static void set_line_pressure(float pressure_percent);
+
+// Overrun clutch control functions
+static overrun_clutch_state_t calculate_overrun_clutch_state(void);
+static void set_overrun_clutch(overrun_clutch_state_t state);
+static void update_overrun_clutch_control(void);
+
+// Helper functions for external data
+static float get_throttle_position_with_timeout(void);
+static float get_vehicle_speed_with_timeout(void);
+static bool get_brake_pedal_with_timeout(void);
+static bool is_decelerating_with_timeout(void);
 
 // =============================================================================
 // PUBLIC FUNCTIONS
@@ -167,7 +227,7 @@ uint8_t transmission_module_init(void) {
     init_transmission_sensor_definitions();
     
     // Register all transmission sensors with the input manager
-    uint8_t registered = input_manager_register_sensors(TRANSMISSION_SENSORS, TRANSMISSION_SENSOR_COUNT);
+    uint8_t registered_sensors = input_manager_register_sensors(TRANSMISSION_SENSORS, TRANSMISSION_SENSOR_COUNT);
     
     // Subscribe to transmission messages
     subscribe_to_transmission_messages();
@@ -180,6 +240,7 @@ uint8_t transmission_module_init(void) {
     trans_state.valid_gear_position = false;
     trans_state.upshift_requested = false;
     trans_state.downshift_requested = false;
+    trans_state.overrun_state = OVERRUN_DISENGAGED;  // Start in safe state
     trans_state.park_switch = false;
     trans_state.reverse_switch = false;
     trans_state.neutral_switch = false;
@@ -190,17 +251,27 @@ uint8_t transmission_module_init(void) {
     // Reset statistics
     shift_count = 0;
     invalid_gear_count = 0;
+    overrun_change_count = 0;
+    
+    // Initialize cached external data timestamps
+    last_throttle_update_ms = 0;
+    last_speed_update_ms = 0;
+    last_brake_update_ms = 0;
+    
+    // Set transmission outputs to safe state initially
+    transmission_outputs_safe_state();
     
     #ifdef ARDUINO
     Serial.print("Transmission module initialized with ");
-    Serial.print(registered);
+    Serial.print(registered_sensors);
     Serial.println(" sensors");
     Serial.print("Paddle debounce time: ");
     Serial.print(paddle_debounce_ms);
     Serial.println("ms");
+    Serial.println("Race car overrun clutch control enabled");
     #endif
     
-    return registered;
+    return registered_sensors;
 }
 
 void transmission_module_update(void) {
@@ -209,6 +280,9 @@ void transmission_module_update(void) {
     
     // Process any pending shift requests
     process_shift_requests();
+    
+    // Update overrun clutch control based on driving conditions (race car logic)
+    update_overrun_clutch_control();
     
     // Publish current transmission state
     publish_transmission_state();
@@ -241,6 +315,14 @@ const char* transmission_gear_to_string(gear_position_t gear) {
     }
 }
 
+const char* transmission_overrun_to_string(overrun_clutch_state_t state) {
+    switch (state) {
+        case OVERRUN_ENGAGED: return "ENGAGED";
+        case OVERRUN_DISENGAGED: return "DISENGAGED";
+        default: return "UNKNOWN";
+    }
+}
+
 void transmission_set_paddle_debounce(uint16_t debounce_ms) {
     paddle_debounce_ms = debounce_ms;
 }
@@ -257,9 +339,112 @@ uint32_t transmission_get_invalid_gear_count(void) {
     return invalid_gear_count;
 }
 
+uint32_t transmission_get_overrun_change_count(void) {
+    return overrun_change_count;
+}
+
 void transmission_reset_statistics(void) {
     shift_count = 0;
     invalid_gear_count = 0;
+    overrun_change_count = 0;
+}
+
+void transmission_set_overrun_override(overrun_clutch_state_t state, bool override_enable) {
+    overrun_manual_override_active = override_enable;
+    overrun_manual_override_state = state;
+    
+    if (override_enable) {
+        // Apply the manual override immediately
+        set_overrun_clutch(state);
+        
+        #ifdef ARDUINO
+        Serial.print("Overrun clutch manual override ENABLED: ");
+        Serial.println(transmission_overrun_to_string(state));
+        #endif
+    } else {
+        #ifdef ARDUINO
+        Serial.println("Overrun clutch manual override DISABLED - returning to automatic control");
+        #endif
+    }
+}
+
+bool transmission_is_overrun_override_active(void) {
+    return overrun_manual_override_active;
+}
+
+void transmission_set_overrun_tuning(float throttle_disengage_pct, float throttle_engage_pct, 
+                                     float min_speed_mph, float braking_speed_mph) {
+    // Clamp values to reasonable ranges for safety
+    overrun_throttle_disengage_threshold = (throttle_disengage_pct < 10.0f) ? 10.0f : 
+                                          (throttle_disengage_pct > 100.0f) ? 100.0f : throttle_disengage_pct;
+    overrun_throttle_engage_threshold = (throttle_engage_pct < 0.0f) ? 0.0f : 
+                                       (throttle_engage_pct > 50.0f) ? 50.0f : throttle_engage_pct;
+    overrun_minimum_speed_mph = (min_speed_mph < 0.0f) ? 0.0f : 
+                               (min_speed_mph > 30.0f) ? 30.0f : min_speed_mph;
+    overrun_braking_speed_threshold = (braking_speed_mph < 10.0f) ? 10.0f : 
+                                     (braking_speed_mph > 100.0f) ? 100.0f : braking_speed_mph;
+    
+    #ifdef ARDUINO
+    Serial.println("Overrun clutch tuning parameters updated:");
+    Serial.print("  Throttle disengage: ");
+    Serial.print(overrun_throttle_disengage_threshold);
+    Serial.println("%");
+    Serial.print("  Throttle engage: ");
+    Serial.print(overrun_throttle_engage_threshold);
+    Serial.println("%");
+    Serial.print("  Minimum speed: ");
+    Serial.print(overrun_minimum_speed_mph);
+    Serial.println(" mph");
+    Serial.print("  Braking speed threshold: ");
+    Serial.print(overrun_braking_speed_threshold);
+    Serial.println(" mph");
+    #endif
+}
+
+void transmission_get_overrun_tuning(float* throttle_disengage_pct, float* throttle_engage_pct,
+                                     float* min_speed_mph, float* braking_speed_mph) {
+    if (throttle_disengage_pct) *throttle_disengage_pct = overrun_throttle_disengage_threshold;
+    if (throttle_engage_pct) *throttle_engage_pct = overrun_throttle_engage_threshold;
+    if (min_speed_mph) *min_speed_mph = overrun_minimum_speed_mph;
+    if (braking_speed_mph) *braking_speed_mph = overrun_braking_speed_threshold;
+}
+
+void transmission_set_lockup(bool engage) {
+    // Publish lockup control message - output manager will handle the rest
+    g_message_bus.publishFloat(MSG_TRANS_LOCKUP_SOL, engage ? 1.0f : 0.0f, false);
+    #ifdef ARDUINO
+    Serial.print("Lockup ");
+    Serial.println(engage ? "engaged" : "disengaged");
+    #endif
+}
+
+void transmission_set_line_pressure(float pressure_percent) {
+    set_line_pressure(pressure_percent);
+}
+
+void transmission_set_solenoid_pattern(uint8_t gear) {
+    set_shift_solenoid_pattern(gear);
+}
+
+void transmission_set_auto_shift(bool enable) {
+    // Implementation depends on how automatic shifting is controlled
+    // For now, just log the setting
+    #ifdef ARDUINO
+    Serial.print("Automatic shifting ");
+    Serial.println(enable ? "enabled" : "disabled");
+    #endif
+}
+
+void transmission_outputs_safe_state(void) {
+    // Set all outputs to safe state
+    set_shift_solenoid_pattern(0);        // Both shift solenoids OFF (Park/Neutral)
+    set_line_pressure_for_gear(GEAR_PARK); // No pressure (0%)
+    transmission_set_lockup(false);       // Lockup disengaged
+    set_overrun_clutch(OVERRUN_DISENGAGED); // Overrun clutch disengaged for safe operation
+    
+    #ifdef ARDUINO
+    Serial.println("Transmission outputs set to safe state");
+    #endif
 }
 
 // =============================================================================
@@ -304,10 +489,30 @@ static void subscribe_to_transmission_messages(void) {
     g_message_bus.subscribe(MSG_TRANS_DRIVE_SWITCH, handle_gear_position_switches);
     g_message_bus.subscribe(MSG_TRANS_SECOND_SWITCH, handle_gear_position_switches);
     g_message_bus.subscribe(MSG_TRANS_FIRST_SWITCH, handle_gear_position_switches);
+    
+    // Subscribe to external data for overrun clutch control
+    g_message_bus.subscribe(MSG_THROTTLE_POSITION, handle_throttle_position);
+    g_message_bus.subscribe(MSG_VEHICLE_SPEED, handle_vehicle_speed);
+    g_message_bus.subscribe(MSG_BRAKE_PEDAL, handle_brake_pedal);
 }
 
 static void handle_trans_fluid_temp(const CANMessage* msg) {
     trans_state.fluid_temperature = MSG_UNPACK_FLOAT(msg);
+}
+
+static void handle_throttle_position(const CANMessage* msg) {
+    cached_throttle_position = MSG_UNPACK_FLOAT(msg);
+    last_throttle_update_ms = millis();
+}
+
+static void handle_vehicle_speed(const CANMessage* msg) {
+    cached_vehicle_speed = MSG_UNPACK_FLOAT(msg);
+    last_speed_update_ms = millis();
+}
+
+static void handle_brake_pedal(const CANMessage* msg) {
+    cached_brake_active = (MSG_UNPACK_FLOAT(msg) > 0.5f);  // Convert to boolean
+    last_brake_update_ms = millis();
 }
 
 static void handle_paddle_upshift(const CANMessage* msg) {
@@ -356,11 +561,59 @@ static void handle_gear_position_switches(const CANMessage* msg) {
     }
 }
 
+// =============================================================================
+// EXTERNAL DATA HELPER FUNCTIONS (MESSAGE BUS WITH TIMEOUT)
+// =============================================================================
+
+static float get_throttle_position_with_timeout(void) {
+    uint32_t now_ms = millis();
+    
+    // Check if data is fresh (within timeout)
+    if (now_ms - last_throttle_update_ms < EXTERNAL_DATA_TIMEOUT_MS) {
+        return cached_throttle_position;
+    } else {
+        // Return safe default if data is stale
+        return 20.0f;  // Safe light throttle default
+    }
+}
+
+static float get_vehicle_speed_with_timeout(void) {
+    uint32_t now_ms = millis();
+    
+    // Check if data is fresh (within timeout)
+    if (now_ms - last_speed_update_ms < EXTERNAL_DATA_TIMEOUT_MS) {
+        return cached_vehicle_speed;
+    } else {
+        // Return safe default if data is stale
+        return 35.0f;  // Safe moderate speed default
+    }
+}
+
+static bool get_brake_pedal_with_timeout(void) {
+    uint32_t now_ms = millis();
+    
+    // Check if data is fresh (within timeout)
+    if (now_ms - last_brake_update_ms < EXTERNAL_DATA_TIMEOUT_MS) {
+        return cached_brake_active;
+    } else {
+        // Return safe default if data is stale
+        return false;  // Safe default (no braking)
+    }
+}
+
+static bool is_decelerating_with_timeout(void) {
+    // Calculate deceleration based on throttle position
+    float throttle = get_throttle_position_with_timeout();
+    return (throttle < 10.0f);  // Consider very light throttle as potential deceleration
+}
+
 static void update_gear_position(void) {
     // Count active switches
     uint8_t active_count = trans_state.park_switch + trans_state.reverse_switch + 
                           trans_state.neutral_switch + trans_state.drive_switch + 
                           trans_state.second_switch + trans_state.first_switch;
+    
+    gear_position_t previous_gear = trans_state.current_gear;
     
     if (active_count == 1) {
         // Valid state - exactly one switch active
@@ -372,11 +625,34 @@ static void update_gear_position(void) {
         else if (trans_state.drive_switch) trans_state.current_gear = GEAR_DRIVE;
         else if (trans_state.second_switch) trans_state.current_gear = GEAR_SECOND;
         else if (trans_state.first_switch) trans_state.current_gear = GEAR_FIRST;
+        
+        // If gear position changed, update solenoid pattern and line pressure
+        if (trans_state.current_gear != previous_gear) {
+            if (trans_state.current_gear == GEAR_DRIVE) {
+                // Entering Drive - set to current automatic gear
+                set_shift_solenoid_pattern(current_auto_gear);
+            } else {
+                // Not in Drive - turn off shift solenoids (Park/Reverse/Neutral/Manual)
+                set_shift_solenoid_pattern(0);  // Both solenoids OFF
+            }
+            
+            // Set line pressure based on gear position
+            set_line_pressure_for_gear(trans_state.current_gear);
+            
+            #ifdef ARDUINO
+            Serial.print("Gear position changed to: ");
+            Serial.println(transmission_gear_to_string(trans_state.current_gear));
+            #endif
+        }
     } else {
         // Invalid state - multiple switches active or no switches active
         trans_state.valid_gear_position = false;
         trans_state.current_gear = GEAR_NEUTRAL;  // Default to neutral for safety
         invalid_gear_count++;
+        
+        // Set safe state - solenoids off, neutral pressure (0%)
+        set_shift_solenoid_pattern(0);
+        set_line_pressure_for_gear(GEAR_NEUTRAL);
         
         #ifdef ARDUINO
         Serial.print("Invalid gear position - ");
@@ -387,22 +663,39 @@ static void update_gear_position(void) {
 }
 
 static void process_shift_requests(void) {
-    // This is where you would add logic to actually control solenoids
-    // For now, just acknowledge the shift request
-    
     if (trans_state.shift_request != SHIFT_NONE) {
-        // In a real implementation, you would:
-        // 1. Check if shifting is safe (gear position, RPM, etc.)
-        // 2. Control transmission solenoids
-        // 3. Monitor shift completion
+        // 1. Check if shifting is safe
+        if (!is_shift_safe()) {
+            #ifdef ARDUINO
+            Serial.println("Shift request denied - conditions not safe");
+            #endif
+            transmission_clear_shift_request();
+            return;
+        }
         
-        // For now, just acknowledge the shift request
-        #ifdef ARDUINO
-        Serial.print("Processing ");
-        Serial.print(trans_state.shift_request == SHIFT_UP ? "upshift" : "downshift");
-        Serial.print(" request in gear ");
-        Serial.println(transmission_gear_to_string(trans_state.current_gear));
-        #endif
+        // 2. Execute the shift
+        bool shift_successful = false;
+        if (trans_state.shift_request == SHIFT_UP) {
+            shift_successful = execute_upshift();
+        } else if (trans_state.shift_request == SHIFT_DOWN) {
+            shift_successful = execute_downshift();
+        }
+        
+        if (shift_successful) {
+            #ifdef ARDUINO
+            Serial.print("Executed ");
+            Serial.print(trans_state.shift_request == SHIFT_UP ? "upshift" : "downshift");
+            Serial.print(" to automatic gear ");
+            Serial.println(current_auto_gear);
+            #endif
+        } else {
+            #ifdef ARDUINO
+            Serial.println("Shift execution failed");
+            #endif
+        }
+        
+        // 3. Clear the shift request
+        transmission_clear_shift_request();
     }
 }
 
@@ -411,4 +704,289 @@ static void publish_transmission_state(void) {
     g_message_bus.publishFloat(MSG_TRANS_CURRENT_GEAR, (float)trans_state.current_gear, false);
     g_message_bus.publishFloat(MSG_TRANS_SHIFT_REQUEST, (float)trans_state.shift_request, false);
     g_message_bus.publishFloat(MSG_TRANS_STATE_VALID, trans_state.valid_gear_position ? 1.0f : 0.0f, false);
+    g_message_bus.publishFloat(MSG_TRANS_OVERRUN_STATE, (float)trans_state.overrun_state, false);
+}
+
+static bool is_shift_safe(void) {
+    // Check if shifting is safe based on current conditions
+    
+    // 1. Must have valid gear position
+    if (!trans_state.valid_gear_position) {
+        return false;
+    }
+    
+    // 2. Can ONLY shift when shift lever is in Drive position
+    if (trans_state.current_gear != GEAR_DRIVE) {
+        return false;
+    }
+    
+    // 3. Cannot shift if transmission is overheating
+    if (transmission_is_overheating(120.0f)) {  // 120°C threshold
+        return false;
+    }
+    
+    return true;
+}
+
+static bool execute_upshift(void) {
+    // Execute upshift - only works when in Drive position
+    // Shift from current automatic gear to next higher gear (1→2→3→4)
+    
+    if (current_auto_gear >= 4) {
+        // Already in highest gear
+        return false;
+    }
+    
+    // Shift to next gear
+    current_auto_gear++;
+    set_shift_solenoid_pattern(current_auto_gear);
+    // Line pressure remains at 100% for all moving gears
+    
+    #ifdef ARDUINO
+    Serial.print("Upshift executed: Drive gear ");
+    Serial.println(current_auto_gear);
+    #endif
+    
+    return true;
+}
+
+static bool execute_downshift(void) {
+    // Execute downshift - only works when in Drive position
+    // Shift from current automatic gear to next lower gear (4→3→2→1)
+    
+    if (current_auto_gear <= 1) {
+        // Already in lowest gear
+        return false;
+    }
+    
+    // Shift to lower gear
+    current_auto_gear--;
+    set_shift_solenoid_pattern(current_auto_gear);
+    // Line pressure remains at 100% for all moving gears
+    
+    #ifdef ARDUINO
+    Serial.print("Downshift executed: Drive gear ");
+    Serial.println(current_auto_gear);
+    #endif
+    
+    return true;
+}
+
+static void set_shift_solenoid_pattern(uint8_t gear) {
+    // Set solenoid pattern for specific gear using message bus
+    // Based on actual transmission logic:
+    // Park/Reverse/Neutral: A=OFF, B=OFF, Lockup=OFF
+    // Gear 1: A=ON, B=ON, Lockup=OFF
+    // Gear 2: A=OFF, B=ON, Lockup=OFF  
+    // Gear 3: A=OFF, B=OFF, Lockup=OFF
+    // Gear 4: A=ON, B=OFF, Lockup=ON
+    
+    bool sol_a_state = false;
+    bool sol_b_state = false;
+    bool lockup_state = false;
+    
+    switch (gear) {
+        case 1:  // Gear 1: A=ON, B=ON, Lockup=OFF
+            sol_a_state = true;
+            sol_b_state = true;
+            lockup_state = false;
+            break;
+        case 2:  // Gear 2: A=OFF, B=ON, Lockup=OFF
+            sol_a_state = false;
+            sol_b_state = true;
+            lockup_state = false;
+            break;
+        case 3:  // Gear 3: A=OFF, B=OFF, Lockup=OFF
+            sol_a_state = false;
+            sol_b_state = false;
+            lockup_state = false;
+            break;
+        case 4:  // Gear 4: A=ON, B=OFF, Lockup=ON
+            sol_a_state = true;
+            sol_b_state = false;
+            lockup_state = true;
+            break;
+        default: // Park/Reverse/Neutral: A=OFF, B=OFF, Lockup=OFF
+            sol_a_state = false;
+            sol_b_state = false;
+            lockup_state = false;
+            break;
+    }
+    
+    g_message_bus.publishFloat(MSG_TRANS_SHIFT_SOL_A, sol_a_state ? 1.0f : 0.0f, false);
+    g_message_bus.publishFloat(MSG_TRANS_SHIFT_SOL_B, sol_b_state ? 1.0f : 0.0f, false);
+    g_message_bus.publishFloat(MSG_TRANS_LOCKUP_SOL, lockup_state ? 1.0f : 0.0f, false);
+                            
+    #ifdef ARDUINO
+    Serial.print("Solenoids - Gear ");
+    Serial.print(gear);
+    Serial.print(": A=");
+    Serial.print(sol_a_state ? "ON" : "OFF");
+    Serial.print(", B=");
+    Serial.print(sol_b_state ? "ON" : "OFF");
+    Serial.print(", Lockup=");
+    Serial.println(lockup_state ? "ON" : "OFF");
+    #endif
+}
+
+static void set_line_pressure_for_gear(gear_position_t gear) {
+    // Set line pressure based on gear position:
+    // - OFF (0%) in Park and Neutral (no hydraulic pressure needed)
+    // - ON (100%) in all moving gears (Reverse, Drive, manual gears)
+    
+    float pressure_percent;
+    
+    if (gear == GEAR_PARK || gear == GEAR_NEUTRAL) {
+        pressure_percent = 0.0f;  // No pressure needed
+    } else {
+        pressure_percent = 1.0f;  // Full pressure for all moving gears
+    }
+    
+    // Publish pressure control message
+    g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent, false);
+                            
+    #ifdef ARDUINO
+    Serial.print("Line pressure set for ");
+    Serial.print(transmission_gear_to_string(gear));
+    Serial.print(": ");
+    Serial.print(pressure_percent * 100.0f);
+    Serial.println("%");
+    #endif
+}
+
+static void set_line_pressure(float pressure_percent) {
+    // Manual line pressure control (for testing/diagnostics)
+    // Clamp to safe range
+    if (pressure_percent < 0.0f) pressure_percent = 0.0f;
+    if (pressure_percent > 1.0f) pressure_percent = 1.0f;
+    
+    // Publish pressure control message
+    g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent, false);
+                            
+    #ifdef ARDUINO
+    Serial.print("Line pressure manually set to: ");
+    Serial.print(pressure_percent * 100.0f);
+    Serial.println("%");
+    #endif
+}
+
+// =============================================================================
+// OVERRUN CLUTCH CONTROL FUNCTIONS
+// =============================================================================
+
+static overrun_clutch_state_t calculate_overrun_clutch_state(void) {
+    // If manual override is active, use the override state
+    if (overrun_manual_override_active) {
+        return overrun_manual_override_state;
+    }
+    
+    // Get current transmission state
+    const transmission_state_t* trans_state = transmission_get_state();
+    
+    // Always disengage during active shifting to prevent binding
+    // This is critical for smooth, fast shifts under power
+    if (trans_state->shift_request != SHIFT_NONE) {
+        return OVERRUN_DISENGAGED;
+    }
+    
+    // Follow manual specification: 4th gear keeps clutch disengaged
+    // This might be for high-speed stability or specific transmission design
+    if (trans_state->current_gear == GEAR_DRIVE && current_auto_gear == 4) {
+        return OVERRUN_DISENGAGED;
+    }
+    
+    // Get driving conditions from message bus (with timeout handling)
+    float throttle_position = get_throttle_position_with_timeout();  // 0-100%
+    float vehicle_speed = get_vehicle_speed_with_timeout();          // MPH
+    bool is_braking = get_brake_pedal_with_timeout();                // True if brake pressed
+    bool is_decelerating = is_decelerating_with_timeout();           // True if decelerating
+    
+    // RACE CAR SPECIFIC LOGIC - Aggressive engagement for maximum control
+    
+    // During braking zones - ALWAYS engage for maximum engine braking control
+    // This helps with corner entry balance and gives driver more tools
+    if (is_braking && vehicle_speed > overrun_braking_speed_threshold) {
+        return OVERRUN_ENGAGED;
+    }
+    
+    // Light throttle with decent speed - engage for precise control
+    // Race drivers need immediate response to throttle lift
+    if (throttle_position < overrun_throttle_engage_threshold && vehicle_speed > overrun_minimum_speed_mph) {
+        return OVERRUN_ENGAGED;
+    }
+    
+    // Moderate throttle in lower gears - keep engaged for responsiveness
+    // Unlike street cars, we want aggressive response even under moderate load
+    if (throttle_position < overrun_moderate_throttle_threshold && (current_auto_gear <= 2)) {
+        return OVERRUN_ENGAGED;
+    }
+    
+    // Deceleration scenarios - engage for driver control
+    if (is_decelerating && vehicle_speed > overrun_minimum_speed_mph) {
+        return OVERRUN_ENGAGED;
+    }
+    
+    // High throttle (power application) - disengage to avoid drivetrain shock
+    // This prevents harsh transitions that could upset the car during acceleration
+    if (throttle_position > overrun_throttle_disengage_threshold) {
+        return OVERRUN_DISENGAGED;
+    }
+    
+    // Very low speeds - disengage for smooth pit lane/paddock driving
+    if (vehicle_speed < overrun_minimum_speed_mph) {
+        return OVERRUN_DISENGAGED;
+    }
+    
+    // Park, Reverse, Neutral - always disengage for safety
+    if (trans_state->current_gear == GEAR_PARK || 
+        trans_state->current_gear == GEAR_REVERSE || 
+        trans_state->current_gear == GEAR_NEUTRAL) {
+        return OVERRUN_DISENGAGED;
+    }
+    
+    // Default for race car: ENGAGED for maximum control and responsiveness
+    // This is opposite of many street car strategies that prioritize comfort
+    return OVERRUN_ENGAGED;
+}
+
+static void set_overrun_clutch(overrun_clutch_state_t state) {
+    // Remember: Solenoid ON (12V) = Clutch OFF, Solenoid OFF (0V) = Clutch ON
+    // This is the inverted logic specified in the manual
+    bool solenoid_power = (state == OVERRUN_DISENGAGED);
+    
+    // Send control message to output manager
+    g_message_bus.publishFloat(MSG_TRANS_OVERRUN_SOL, solenoid_power ? 1.0f : 0.0f, false);
+    
+    #ifdef ARDUINO
+    Serial.print("Overrun clutch ");
+    Serial.print(transmission_overrun_to_string(state));
+    Serial.print(" (solenoid ");
+    Serial.print(solenoid_power ? "ON-12V" : "OFF-0V");
+    Serial.println(")");
+    #endif
+}
+
+static void update_overrun_clutch_control(void) {
+    // Calculate desired overrun clutch state based on current conditions
+    overrun_clutch_state_t desired_state = calculate_overrun_clutch_state();
+    
+    // Only change state if it's different from current state
+    if (desired_state != trans_state.overrun_state) {
+        overrun_clutch_state_t previous_state = trans_state.overrun_state;
+        trans_state.overrun_state = desired_state;
+        overrun_change_count++;
+        
+        // Apply the new state to the hardware
+        set_overrun_clutch(desired_state);
+        
+        #ifdef ARDUINO
+        Serial.print("Overrun clutch state changed: ");
+        Serial.print(transmission_overrun_to_string(previous_state));
+        Serial.print(" → ");
+        Serial.println(transmission_overrun_to_string(desired_state));
+        #else
+        // Suppress unused variable warning in non-Arduino builds
+        (void)previous_state;
+        #endif
+    }
 }

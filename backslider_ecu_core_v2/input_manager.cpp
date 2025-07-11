@@ -4,6 +4,11 @@
 // This file contains the main logic for sensor management.
 // Kept focused on the core update loop and sensor registration.
 
+#ifdef TESTING
+// For desktop testing, include mock Arduino before anything else
+#include "tests/mock_arduino.h"
+#endif
+
 #include "input_manager.h"
 #include "sensor_calibration.h"
 #include "msg_bus.h"
@@ -190,17 +195,10 @@ static void update_single_sensor(uint8_t sensor_index) {
     
     // Read raw sensor data
     if (sensor->type == SENSOR_DIGITAL_PULLUP) {
-        #ifdef ARDUINO
         uint8_t digital_value = digitalRead(sensor->pin);
-        if (sensor->config.digital.invert_logic) {
-            digital_value = !digital_value;
-        }
+        // Store raw reading - calibration function will handle inversion
         runtime->raw_counts = digital_value;
         runtime->raw_voltage = digital_value ? ADC_VOLTAGE_REF : 0.0f;
-        #else
-        runtime->raw_counts = 1;  // Mock reading
-        runtime->raw_voltage = ADC_VOLTAGE_REF;
-        #endif
     } else {
         // Analog sensors
         #ifdef ARDUINO
@@ -263,7 +261,6 @@ static void update_single_sensor(uint8_t sensor_index) {
 }
 
 static void configure_sensor_pin(const sensor_definition_t* sensor) {
-    #ifdef ARDUINO
     switch (sensor->type) {
         case SENSOR_ANALOG_LINEAR:
         case SENSOR_THERMISTOR:
@@ -281,8 +278,11 @@ static void configure_sensor_pin(const sensor_definition_t* sensor) {
         case SENSOR_FREQUENCY_COUNTER:
             pinMode(sensor->pin, INPUT);
             break;
+            
+        case SENSOR_TYPE_COUNT:
+            // This is not a real sensor type, just a count marker
+            break;
     }
-    #endif
 }
 
 static float apply_sensor_filtering(uint8_t sensor_index, float new_value) {

@@ -7,6 +7,9 @@
 #ifndef MOCK_ARDUINO_H
 #define MOCK_ARDUINO_H
 
+// Define TESTING macro to prevent conflicts with msg_bus.h
+#define TESTING
+
 #include <cstdint>
 #include <iostream>
 #include <string>
