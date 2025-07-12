@@ -98,7 +98,9 @@ float calibrate_frequency(const frequency_config_t* config, uint32_t frequency_h
     if (config == nullptr) return 0.0f;
     
     // Convert frequency to meaningful units (RPM, speed, etc.)
-    float base_value = static_cast<float>(frequency_hz) / config->pulses_per_unit;
+    // For RPM: RPM = (frequency_hz * 60 seconds/minute) / pulses_per_revolution
+    // For other sensors: adjust based on scaling_factor
+    float base_value = (static_cast<float>(frequency_hz) * 60.0f) / config->pulses_per_unit;
     return base_value * config->scaling_factor;
 }
 

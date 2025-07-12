@@ -80,6 +80,8 @@
 #define MSG_TRANS_DRIVE_SWITCH      0x406   // Drive position switch
 #define MSG_TRANS_SECOND_SWITCH     0x407   // Second gear position switch
 #define MSG_TRANS_FIRST_SWITCH      0x408   // First gear position switch
+#define MSG_TRANS_INPUT_SPEED       0x409   // Transmission input shaft speed (RPM)
+#define MSG_TRANS_OUTPUT_SPEED      0x40A   // Transmission output shaft speed (RPM)
 
 // Combined transmission state messages (0x410-0x41F range)
 #define MSG_TRANS_CURRENT_GEAR      0x410   // Current gear position
