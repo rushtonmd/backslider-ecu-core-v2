@@ -172,6 +172,29 @@ TEST(test_name) {
 }
 ```
 
+### Makefile Test System:
+The project uses a comprehensive Makefile system for building and running tests:
+
+```bash
+# Available test targets
+make all                    # Build all test executables
+make test                   # Run all test suites
+make run-input-manager      # Run input manager tests only
+make run-transmission       # Run transmission tests only
+make run-trigger-learning   # Run trigger learning tests only
+make clean                  # Remove test executables
+make help                   # Show all available targets
+```
+
+**Test Modules Supported:**
+- `main_application` - Core application logic
+- `message_bus` - Internal CAN-style messaging
+- `input_manager` - High-performance sensor reading
+- `transmission_module` - Automatic transmission control
+- `output_manager` - PWM and digital output control
+- `trigger_learning` - Auto-learning trigger wheel patterns
+- `fuel_module`, `ignition_module`, `sensors` - Additional modules
+
 ### Comprehensive Test Coverage:
 
 #### Input Manager Tests:
@@ -184,6 +207,16 @@ TEST(test_name) {
 - **Real-world scenarios** (engine startup, vehicle acceleration, transmission operation)
 - **Edge cases** (very low frequency, sensor timeouts, erratic readings)
 - **Interrupt-based performance** (ISR registration, message rate control)
+
+#### Trigger Learning Tests:
+- **Test Infrastructure Ready** - Makefile integration with trigger learning module
+- **Basic Learning System Tests** - Initialization, session control, timeout handling (3/3 passing)
+- **Pattern Analysis Tests** - Event recording, cycle detection, pin behavior analysis (in development)
+- **Statistical Analysis Tests** - Interval statistics, outlier detection for sync landmarks
+- **Sync Landmark Detection** - Missing teeth gaps, cam windows, pulse patterns
+- **Fingerprint Generation** - Pattern hash creation, multi-sensor analysis
+- **Real-world Scenarios** - LS3 engine simulation, complex multi-cam patterns
+- **Edge Cases** - Insufficient data, noise handling, single-pin patterns
 
 #### Test Examples:
 ```cpp

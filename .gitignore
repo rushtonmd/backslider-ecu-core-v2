@@ -1,0 +1,44 @@
+# Test executables (compiled binaries - no extension)
+# Ignore test_* files but NOT test_*.cpp, test_*.h, etc.
+test_*
+!test_*.cpp
+!test_*.h
+!test_*.c
+tests/**/test_*
+!tests/**/test_*.cpp
+!tests/**/test_*.h
+!tests/**/test_*.c
+
+# Build artifacts
+*.o
+*.obj
+*.elf
+*.hex
+*.bin
+*.map
+
+# IDE and editor files
+.vscode/
+.vs/
+*.code-workspace
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Arduino IDE files
+*.fqbn
+*.with_bootloader.bin
+*.with_bootloader.hex
+
+# Compilation databases
+compile_commands.json 
