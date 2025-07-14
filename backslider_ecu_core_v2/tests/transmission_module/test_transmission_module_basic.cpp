@@ -209,7 +209,7 @@ TEST(transmission_module_initialization) {
 // Test safe state initialization
 TEST(safe_state_initialization) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     setup_output_message_capture();
     
@@ -235,7 +235,7 @@ TEST(safe_state_initialization) {
 // Test basic gear position detection
 TEST(gear_position_detection) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     transmission_module_init();
     
@@ -310,7 +310,7 @@ TEST(gear_position_detection) {
 // Test invalid gear position handling
 TEST(invalid_gear_position_handling) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     transmission_module_init();
     
@@ -340,7 +340,7 @@ TEST(invalid_gear_position_handling) {
 // Test solenoid patterns for all gears
 TEST(solenoid_patterns_all_gears) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     setup_output_message_capture();
     transmission_module_init();
@@ -385,7 +385,7 @@ TEST(solenoid_patterns_all_gears) {
 // Test direct solenoid pattern setting
 TEST(direct_solenoid_patterns) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     setup_output_message_capture();
     transmission_module_init();
@@ -433,7 +433,7 @@ TEST(direct_solenoid_patterns) {
 // Test paddle shifter debouncing
 TEST(paddle_shifter_debouncing) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     transmission_module_init();
     
@@ -492,7 +492,7 @@ TEST(paddle_shifter_debouncing) {
 // Test paddle shifting only works in Drive
 TEST(paddle_shifting_drive_only) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     transmission_module_init();
     
@@ -545,7 +545,7 @@ TEST(paddle_shifting_drive_only) {
 // Test basic overrun clutch control
 TEST(overrun_clutch_basic_control) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     setup_output_message_capture();
     transmission_module_init();
@@ -561,7 +561,7 @@ TEST(overrun_clutch_basic_control) {
 // Test overrun clutch manual override
 TEST(overrun_clutch_manual_override) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     setup_output_message_capture();
     transmission_module_init();
@@ -674,7 +674,7 @@ TEST(overheating_detection) {
 // Test safe state function
 TEST(safe_state_function) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     setup_output_message_capture();
     transmission_module_init();
@@ -698,7 +698,7 @@ TEST(safe_state_function) {
 // Test statistics and diagnostics
 TEST(statistics_and_diagnostics) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     transmission_module_init();
     

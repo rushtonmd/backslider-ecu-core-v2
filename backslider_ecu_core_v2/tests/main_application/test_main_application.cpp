@@ -7,8 +7,9 @@
 // Include mock Arduino before any ECU code
 #include "../mock_arduino.h"
 
-// Define the Serial mock object that will be used by both test and main_application
+// Define the Serial mock objects that will be used by both test and main_application
 MockSerial Serial;
+MockSerial Serial1;
 
 // Include main application and dependencies
 #include "../../main_application.h"
@@ -148,7 +149,7 @@ TEST(message_bus_integration) {
     assert(final_messages >= initial_messages);  // Should not decrease
     
     // Test that we can manually publish and process a message
-    bool publish_result = g_message_bus.publishFloat(MSG_DEBUG_MESSAGE, 123.45f, false);
+    bool publish_result = g_message_bus.publishFloat(MSG_DEBUG_MESSAGE, 123.45f);
     assert(publish_result == true);
     
     // Process the message we just published

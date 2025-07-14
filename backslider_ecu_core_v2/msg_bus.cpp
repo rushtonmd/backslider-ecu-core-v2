@@ -11,10 +11,7 @@ MessageBus::MessageBus() :
     queue_head(0),
     queue_tail(0),
     messages_processed(0),
-    queue_overflows(0),
-    can_messages_received(0),
-    can_messages_sent(0),
-    physical_can_enabled(false)
+    queue_overflows(0)
 {
     // Initialize subscriber array
     for (uint8_t i = 0; i < MAX_SUBSCRIBERS; i++) {
@@ -23,7 +20,7 @@ MessageBus::MessageBus() :
     }
 }
 
-void MessageBus::init(bool enable_physical_can, uint32_t can_baud) {
+void MessageBus::init() {
     debug_print("MessageBus: Initializing...");
     
     // Reset queue
@@ -32,14 +29,6 @@ void MessageBus::init(bool enable_physical_can, uint32_t can_baud) {
     
     // Reset statistics
     resetStatistics();
-    
-    #ifdef ARDUINO
-    if (enable_physical_can) {
-        init_physical_can(can_baud);
-    }
-    #endif
-    
-    physical_can_enabled = enable_physical_can;
     
     debug_print("MessageBus: Initialization complete");
 }
@@ -61,7 +50,7 @@ bool MessageBus::subscribe(uint32_t msg_id, MessageHandler handler) {
     return true;
 }
 
-bool MessageBus::publish(uint32_t msg_id, const void* data, uint8_t length, bool send_on_can) {
+bool MessageBus::publish(uint32_t msg_id, const void* data, uint8_t length) {
     if (length > 8) {
         debug_print("MessageBus: Publish failed - data too long");
         return false;
@@ -85,40 +74,26 @@ bool MessageBus::publish(uint32_t msg_id, const void* data, uint8_t length, bool
         return false;
     }
     
-    // Send on physical CAN if enabled
-    #ifdef ARDUINO
-    if (send_on_can && physical_can_enabled) {
-        send_to_physical_can(msg);
-    }
-    #endif
-    
     return true;
 }
 
-bool MessageBus::publishFloat(uint32_t msg_id, float value, bool send_on_can) {
-    return publish(msg_id, &value, sizeof(float), send_on_can);
+bool MessageBus::publishFloat(uint32_t msg_id, float value) {
+    return publish(msg_id, &value, sizeof(float));
 }
 
-bool MessageBus::publishUint32(uint32_t msg_id, uint32_t value, bool send_on_can) {
-    return publish(msg_id, &value, sizeof(uint32_t), send_on_can);
+bool MessageBus::publishUint32(uint32_t msg_id, uint32_t value) {
+    return publish(msg_id, &value, sizeof(uint32_t));
 }
 
-bool MessageBus::publishUint16(uint32_t msg_id, uint16_t value, bool send_on_can) {
-    return publish(msg_id, &value, sizeof(uint16_t), send_on_can);
+bool MessageBus::publishUint16(uint32_t msg_id, uint16_t value) {
+    return publish(msg_id, &value, sizeof(uint16_t));
 }
 
-bool MessageBus::publishUint8(uint32_t msg_id, uint8_t value, bool send_on_can) {
-    return publish(msg_id, &value, sizeof(uint8_t), send_on_can);
+bool MessageBus::publishUint8(uint32_t msg_id, uint8_t value) {
+    return publish(msg_id, &value, sizeof(uint8_t));
 }
 
 void MessageBus::process() {
-    #ifdef ARDUINO
-    // Read incoming CAN messages first
-    if (physical_can_enabled) {
-        read_physical_can_messages();
-    }
-    #endif
-    
     // Process internal message queue
     process_internal_queue();
 }
@@ -179,8 +154,6 @@ bool MessageBus::isQueueFull() const {
 void MessageBus::resetStatistics() {
     messages_processed = 0;
     queue_overflows = 0;
-    can_messages_received = 0;
-    can_messages_sent = 0;
 }
 
 void MessageBus::resetSubscribers() {
@@ -192,44 +165,7 @@ void MessageBus::resetSubscribers() {
     }
 }
 
-#ifdef ARDUINO
-void MessageBus::init_physical_can(uint32_t baud) {
-    debug_print("MessageBus: Initializing physical CAN...");
-    
-    physical_can.begin();
-    physical_can.setBaudRate(baud);
-    
-    // Set up CAN filters if needed
-    // physical_can.setMaxMB(16);
-    // physical_can.enableFIFO();
-    
-    char debug_msg[64];
-    snprintf(debug_msg, sizeof(debug_msg), "MessageBus: Physical CAN initialized at %lu baud", baud);
-    debug_print(debug_msg);
-}
 
-void MessageBus::read_physical_can_messages() {
-    CAN_message_t incoming_msg;
-    
-    while (physical_can.read(incoming_msg)) {
-        can_messages_received++;
-        
-        // Add incoming CAN message to internal queue
-        if (!enqueue_internal_message(incoming_msg)) {
-            queue_overflows++;
-        }
-        
-        debug_print_message(incoming_msg, "CAN RX");
-    }
-}
-
-void MessageBus::send_to_physical_can(const CANMessage& msg) {
-    if (physical_can.write(msg)) {
-        can_messages_sent++;
-        debug_print_message(msg, "CAN TX");
-    }
-}
-#endif
 
 void MessageBus::debug_print(const char* message) {
     #ifdef ARDUINO

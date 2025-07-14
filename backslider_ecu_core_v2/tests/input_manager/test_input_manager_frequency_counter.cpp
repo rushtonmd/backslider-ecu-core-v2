@@ -267,7 +267,7 @@ TEST(multiple_frequency_sensors) {
 // Test basic frequency measurement and publishing
 TEST(frequency_measurement_basic) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to RPM messages
@@ -298,7 +298,7 @@ TEST(frequency_measurement_basic) {
 // Test zero frequency handling (stopped engine)
 TEST(zero_frequency_handling) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to RPM messages
@@ -328,7 +328,7 @@ TEST(zero_frequency_handling) {
 // Test high frequency performance
 TEST(high_frequency_performance) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to high-frequency sensor
@@ -361,7 +361,7 @@ TEST(high_frequency_performance) {
 // Test frequency sensor update timing
 TEST(frequency_sensor_timing) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to frequency messages
@@ -444,7 +444,7 @@ TEST(frequency_sensor_error_handling) {
 // Test engine RPM sensor scenario
 TEST(engine_rpm_sensor_scenario) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to engine RPM
@@ -485,7 +485,7 @@ TEST(engine_rpm_sensor_scenario) {
 // Test vehicle speed sensor scenario
 TEST(vehicle_speed_sensor_scenario) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to vehicle speed
@@ -526,7 +526,7 @@ TEST(vehicle_speed_sensor_scenario) {
 // Test transmission speed sensor scenario
 TEST(transmission_speed_sensor_scenario) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to transmission speeds
@@ -566,7 +566,7 @@ TEST(transmission_speed_sensor_scenario) {
 // Test frequency sensor timeout behavior
 TEST(frequency_sensor_timeout) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to frequency messages
@@ -600,7 +600,7 @@ TEST(frequency_sensor_timeout) {
 // Test frequency sensor with very low frequency
 TEST(very_low_frequency) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to frequency messages
@@ -655,7 +655,7 @@ TEST(interrupt_frequency_registration) {
 // Test performance comparison between interrupt and polling modes
 TEST(interrupt_vs_polling_performance) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to messages
@@ -696,7 +696,7 @@ TEST(interrupt_vs_polling_performance) {
 // Test configurable message update rates
 TEST(configurable_message_rates) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to messages

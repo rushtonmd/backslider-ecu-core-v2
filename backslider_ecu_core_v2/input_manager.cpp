@@ -443,7 +443,7 @@ static float apply_sensor_filtering(uint8_t sensor_index, float new_value) {
 
 static void publish_sensor_value(uint32_t msg_id, float value) {
     // Publish to message bus (internal only for now)
-    g_message_bus.publishFloat(msg_id, value, false);
+    g_message_bus.publishFloat(msg_id, value);
 }
 
 static void handle_sensor_error(uint8_t sensor_index) {

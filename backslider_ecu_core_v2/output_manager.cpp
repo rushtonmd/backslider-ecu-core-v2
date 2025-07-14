@@ -545,7 +545,7 @@ static void update_virtual_output(output_definition_t* output, float value) {
     // Send to CAN if configured
     if (output->config.virtual_out.send_to_can) {
         // Publish the virtual output value on the CAN bus
-        g_message_bus.publishFloat(output->msg_id, clamped_value, true);
+        g_message_bus.publishFloat(output->msg_id, clamped_value);
     }
     #endif
 }

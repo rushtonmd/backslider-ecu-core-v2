@@ -4,6 +4,7 @@
 #ifdef TESTING
 #include "tests/mock_arduino.h"
 extern MockSerial Serial;  // Use the Serial object from the test environment
+extern MockSerial Serial1; // Additional serial port for external communications
 #else
 #include <Arduino.h>
 #endif
@@ -11,6 +12,10 @@ extern MockSerial Serial;  // Use the Serial object from the test environment
 #include "main_application.h"
 #include "msg_bus.h"
 #include "input_manager.h"
+#include "output_manager.h"
+#include "external_serial.h"
+#include "external_canbus.h"
+#include "sensor_calibration.h"
 #include "transmission_module.h"
 // #include "engine_sensors.h"  // TODO: Create engine_sensors.h when ready
 // #include "transmission_sensors.h"  // TODO: Create transmission_sensors.h when ready
@@ -32,11 +37,52 @@ void MainApplication::init() {
     
     // Initialize message bus (internal messaging only for now)
     Serial.println("Initializing message bus...");
-    g_message_bus.init(false);  // false = no physical CAN bus yet
+    g_message_bus.init();  // false = no physical CAN bus yet
     
     // Initialize input manager
     Serial.println("Initializing input manager...");
     input_manager_init();
+
+    // Initialize output manager (must be before modules that use outputs)
+    Serial.println("Initializing output manager...");
+    uint8_t output_init_result = output_manager_init();
+    if (output_init_result) {
+        Serial.println("Output manager initialized successfully");
+    } else {
+        Serial.println("WARNING: Output manager initialization failed");
+    }
+
+    // Initialize external communications
+    Serial.println("Initializing external communications...");
+    
+    // External serial for Arduino-to-Arduino communication
+    #ifdef ARDUINO
+    #if defined(SERIAL_PORT_HARDWARE1) || defined(HAVE_HWSERIAL1)
+    g_external_serial.init(1, &Serial1, 115200);  // Device ID 1, using Serial1 port
+    Serial.println("External serial communication initialized");
+    #else
+    Serial.println("External serial communication (Serial1 not available)");
+    #endif
+    #else
+    // In testing environment, we skip external serial initialization due to type mismatch
+    // MockSerial* cannot be passed to HardwareSerial* parameter
+    Serial.println("External serial communication (mock mode - init skipped)");
+    #endif
+    
+    // External CAN bus for OBD-II and custom devices
+    external_canbus_config_t canbus_config = {
+        .baudrate = 500000,
+        .enable_obdii = true,
+        .enable_custom_messages = true,
+        .can_bus_number = 1,
+        .cache_default_max_age_ms = 1000
+    };
+    
+    if (g_external_canbus.init(canbus_config)) {
+        Serial.println("External CAN bus initialized (OBD-II + custom devices)");
+    } else {
+        Serial.println("WARNING: External CAN bus initialization failed");
+    }
 
     // Initialize transmission module
     Serial.println("Initializing transmission module...");
@@ -72,13 +118,25 @@ void MainApplication::run() {
     // Process message bus (route sensor data to modules)
     g_message_bus.process();
 
+    // Update output manager (controls all physical outputs)
+    output_manager_update();
+
     // Update transmission module
     transmission_module_update();
+    
+    // Update external communications (share data with other ECUs and devices)
+    #ifdef ARDUINO
+    #if defined(SERIAL_PORT_HARDWARE1) || defined(HAVE_HWSERIAL1)
+    g_external_serial.update();
+    #endif
+    #else
+    // In testing environment, external serial update is skipped (not initialized)
+    #endif
+    g_external_canbus.update();
     
     // TODO: Add other module updates here as they're developed
     // fuel_module_update();
     // ignition_module_update();
-    // transmission_module_update();
     
     // Calculate loop timing
     uint32_t loop_end_us = micros();
@@ -127,6 +185,26 @@ void MainApplication::printStatusReport() {
     Serial.println(input_manager_get_total_updates());
     Serial.print("Sensor errors: ");
     Serial.println(input_manager_get_total_errors());
+
+    // Output manager statistics
+    const output_manager_stats_t* output_stats = output_manager_get_stats();
+    Serial.print("Total outputs: ");
+    Serial.println(output_stats->total_outputs);
+    Serial.print("Output updates: ");
+    Serial.println(output_stats->total_updates);
+    Serial.print("Output errors: ");
+    Serial.println(output_stats->fault_count);
+
+    // External communications statistics
+    const external_canbus_stats_t& canbus_stats = g_external_canbus.get_statistics();
+    Serial.print("CAN messages sent: ");
+    Serial.println(canbus_stats.messages_sent);
+    Serial.print("CAN messages received: ");
+    Serial.println(canbus_stats.messages_received);
+    Serial.print("OBD-II requests: ");
+    Serial.println(canbus_stats.obdii_requests);
+    Serial.print("Cache size: ");
+    Serial.println(g_external_canbus.get_cache_size());
 
     // Transmission statistics
     Serial.print("Current gear: ");

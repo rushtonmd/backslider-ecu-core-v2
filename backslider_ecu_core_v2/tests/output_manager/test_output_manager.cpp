@@ -202,7 +202,7 @@ TEST(direct_output_control) {
 // Test message-driven output control
 TEST(message_driven_control) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     output_manager_init();
     
     // Register a digital output
@@ -223,7 +223,7 @@ TEST(message_driven_control) {
     output_manager_register_outputs(test_output, 1);
     
     // Publish message to turn on output
-    g_message_bus.publishFloat(MSG_SHIFT_LIGHT, 1.0f, false);
+    g_message_bus.publishFloat(MSG_SHIFT_LIGHT, 1.0f);
     
     // Process message bus
     g_message_bus.process();
@@ -233,7 +233,7 @@ TEST(message_driven_control) {
     assert(output_manager_get_value(0) == 1.0f);
     
     // Publish message to turn off output
-    g_message_bus.publishFloat(MSG_SHIFT_LIGHT, 0.0f, false);
+    g_message_bus.publishFloat(MSG_SHIFT_LIGHT, 0.0f);
     
     // Process message bus
     g_message_bus.process();

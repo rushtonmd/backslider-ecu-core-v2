@@ -41,7 +41,7 @@ void test_message_handler(const CANMessage* msg) {
 // Test basic message bus creation and initialization
 TEST(message_bus_creation) {
     MessageBus bus;
-    bus.init(false);  // No physical CAN for testing
+    bus.init();
     
     // Check initial state
     assert(bus.getMessagesProcessed() == 0);
@@ -53,7 +53,7 @@ TEST(message_bus_creation) {
 // Test subscription mechanism
 TEST(message_subscription) {
     MessageBus bus;
-    bus.init(false);
+    bus.init();
     
     // Subscribe to a message
     bool result = bus.subscribe(MSG_ENGINE_RPM, test_message_handler);
@@ -69,7 +69,7 @@ TEST(message_subscription) {
 // Test message publishing and delivery
 TEST(message_publish_and_delivery) {
     MessageBus bus;
-    bus.init(false);
+    bus.init();
     message_received = false;
     
     // Subscribe to RPM messages
@@ -77,7 +77,7 @@ TEST(message_publish_and_delivery) {
     
     // Publish an RPM message
     float test_rpm = 3000.0f;
-    bool result = bus.publishFloat(MSG_ENGINE_RPM, test_rpm, false);  // No CAN
+    bool result = bus.publishFloat(MSG_ENGINE_RPM, test_rpm);
     assert(result == true);
     
     // Process messages
@@ -99,14 +99,14 @@ TEST(message_publish_and_delivery) {
 // Test different data types
 TEST(different_data_types) {
     MessageBus bus;
-    bus.init(false);
+    bus.init();
     message_received = false;
     
     // Test uint8 data
     bus.subscribe(MSG_ENGINE_STATUS, test_message_handler);
     uint8_t status = ENGINE_STATUS_RUNNING;
     
-    bus.publishUint8(MSG_ENGINE_STATUS, status, false);
+    bus.publishUint8(MSG_ENGINE_STATUS, status);
     bus.process();
     
     assert(message_received == true);
@@ -119,7 +119,7 @@ TEST(different_data_types) {
     bus.subscribe(MSG_IDLE_TARGET_RPM, test_message_handler);
     uint16_t target_rpm = 800;
     
-    bus.publishUint16(MSG_IDLE_TARGET_RPM, target_rpm, false);
+    bus.publishUint16(MSG_IDLE_TARGET_RPM, target_rpm);
     bus.process();
     
     assert(message_received == true);
@@ -129,7 +129,7 @@ TEST(different_data_types) {
 // Test queue functionality
 TEST(queue_management) {
     MessageBus bus;
-    bus.init(false);
+    bus.init();
     
     // Initial queue should be empty
     assert(bus.getQueueSize() == 0);
@@ -137,7 +137,7 @@ TEST(queue_management) {
     
     // Add some messages without processing
     for (int i = 0; i < 10; i++) {
-        bus.publishFloat(MSG_ENGINE_RPM, 1000.0f + i, false);
+        bus.publishFloat(MSG_ENGINE_RPM, 1000.0f + i);
     }
     
     // Queue should have messages now
@@ -155,7 +155,7 @@ TEST(queue_management) {
 // Test message filtering (subscribers only get their messages)
 TEST(message_filtering) {
     MessageBus bus;
-    bus.init(false);
+    bus.init();
     
     static int rpm_messages = 0;
     static int temp_messages = 0;
@@ -175,10 +175,10 @@ TEST(message_filtering) {
     bus.subscribe(MSG_COOLANT_TEMP, temp_handler);
     
     // Publish various messages
-    bus.publishFloat(MSG_ENGINE_RPM, 3000.0f, false);
-    bus.publishFloat(MSG_ENGINE_RPM, 3500.0f, false);
-    bus.publishFloat(MSG_COOLANT_TEMP, 85.0f, false);
-    bus.publishFloat(MSG_BATTERY_VOLTAGE, 12.6f, false);  // No subscriber
+    bus.publishFloat(MSG_ENGINE_RPM, 3000.0f);
+    bus.publishFloat(MSG_ENGINE_RPM, 3500.0f);
+    bus.publishFloat(MSG_COOLANT_TEMP, 85.0f);
+    bus.publishFloat(MSG_BATTERY_VOLTAGE, 12.6f);  // No subscriber
     
     // Process all messages
     bus.process();
@@ -192,15 +192,15 @@ TEST(message_filtering) {
 // Test statistics and diagnostics
 TEST(statistics_and_diagnostics) {
     MessageBus bus;
-    bus.init(false);
+    bus.init();
     
     // Initial statistics
     assert(bus.getMessagesProcessed() == 0);
     assert(bus.getQueueOverflows() == 0);
     
     // Process some messages
-    bus.publishFloat(MSG_ENGINE_RPM, 3000.0f, false);
-    bus.publishFloat(MSG_COOLANT_TEMP, 85.0f, false);
+    bus.publishFloat(MSG_ENGINE_RPM, 3000.0f);
+    bus.publishFloat(MSG_COOLANT_TEMP, 85.0f);
     bus.process();
     
     assert(bus.getMessagesProcessed() == 2);

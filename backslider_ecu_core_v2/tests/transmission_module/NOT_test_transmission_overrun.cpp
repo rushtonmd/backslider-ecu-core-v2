@@ -105,7 +105,7 @@
 //     test_setup();
     
 //     g_message_bus.resetSubscribers();
-//     g_message_bus.init(false);
+//     g_message_bus.init();
 //     input_manager_init();
 // }
 

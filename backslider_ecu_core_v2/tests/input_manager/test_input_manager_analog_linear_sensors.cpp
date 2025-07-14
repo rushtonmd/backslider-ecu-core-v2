@@ -300,7 +300,7 @@ TEST(linear_calibration_edge_cases) {
 // Test analog sensor reading and message publishing
 TEST(analog_sensor_reading_and_publishing) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to TPS messages
@@ -366,7 +366,7 @@ TEST(analog_sensor_reading_and_publishing) {
 // Test multiple analog sensors publishing simultaneously
 TEST(multiple_analog_sensors_publishing) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to multiple sensor messages
@@ -432,7 +432,7 @@ TEST(multiple_analog_sensors_publishing) {
 // Test analog sensor response to changing voltages
 TEST(analog_sensor_voltage_changes) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to TPS messages
@@ -473,7 +473,7 @@ TEST(analog_sensor_voltage_changes) {
 // Test analog sensor filtering (low-pass filter)
 TEST(analog_sensor_filtering) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Create TPS sensor with moderate filtering (filter_strength = 100)

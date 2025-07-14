@@ -481,7 +481,7 @@ void transmission_get_overrun_tuning(float* throttle_disengage_pct, float* throt
 
 void transmission_set_lockup(bool engage) {
     // Publish lockup control message - output manager will handle the rest
-    g_message_bus.publishFloat(MSG_TRANS_LOCKUP_SOL, engage ? 1.0f : 0.0f, false);
+    g_message_bus.publishFloat(MSG_TRANS_LOCKUP_SOL, engage ? 1.0f : 0.0f);
     #ifdef ARDUINO
     Serial.print("Lockup ");
     Serial.println(engage ? "engaged" : "disengaged");
@@ -771,10 +771,10 @@ static void process_shift_requests(void) {
 
 static void publish_transmission_state(void) {
     // Publish combined transmission state messages
-    g_message_bus.publishFloat(MSG_TRANS_CURRENT_GEAR, (float)trans_state.current_gear, false);
-    g_message_bus.publishFloat(MSG_TRANS_SHIFT_REQUEST, (float)trans_state.shift_request, false);
-    g_message_bus.publishFloat(MSG_TRANS_STATE_VALID, trans_state.valid_gear_position ? 1.0f : 0.0f, false);
-    g_message_bus.publishFloat(MSG_TRANS_OVERRUN_STATE, (float)trans_state.overrun_state, false);
+    g_message_bus.publishFloat(MSG_TRANS_CURRENT_GEAR, (float)trans_state.current_gear);
+    g_message_bus.publishFloat(MSG_TRANS_SHIFT_REQUEST, (float)trans_state.shift_request);
+    g_message_bus.publishFloat(MSG_TRANS_STATE_VALID, trans_state.valid_gear_position ? 1.0f : 0.0f);
+    g_message_bus.publishFloat(MSG_TRANS_OVERRUN_STATE, (float)trans_state.overrun_state);
 }
 
 static bool is_shift_safe(void) {
@@ -883,9 +883,9 @@ static void set_shift_solenoid_pattern(uint8_t gear) {
             break;
     }
     
-    g_message_bus.publishFloat(MSG_TRANS_SHIFT_SOL_A, sol_a_state ? 1.0f : 0.0f, false);
-    g_message_bus.publishFloat(MSG_TRANS_SHIFT_SOL_B, sol_b_state ? 1.0f : 0.0f, false);
-    g_message_bus.publishFloat(MSG_TRANS_LOCKUP_SOL, lockup_state ? 1.0f : 0.0f, false);
+    g_message_bus.publishFloat(MSG_TRANS_SHIFT_SOL_A, sol_a_state ? 1.0f : 0.0f);
+    g_message_bus.publishFloat(MSG_TRANS_SHIFT_SOL_B, sol_b_state ? 1.0f : 0.0f);
+    g_message_bus.publishFloat(MSG_TRANS_LOCKUP_SOL, lockup_state ? 1.0f : 0.0f);
                             
     #ifdef ARDUINO
     Serial.print("Solenoids - Gear ");
@@ -913,7 +913,7 @@ static void set_line_pressure_for_gear(gear_position_t gear) {
     }
     
     // Publish pressure control message
-    g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent, false);
+    g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent);
                             
     #ifdef ARDUINO
     Serial.print("Line pressure set for ");
@@ -931,7 +931,7 @@ static void set_line_pressure(float pressure_percent) {
     if (pressure_percent > 1.0f) pressure_percent = 1.0f;
     
     // Publish pressure control message
-    g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent, false);
+    g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent);
                             
     #ifdef ARDUINO
     Serial.print("Line pressure manually set to: ");
@@ -1025,7 +1025,7 @@ static void set_overrun_clutch(overrun_clutch_state_t state) {
     bool solenoid_power = (state == OVERRUN_DISENGAGED);
     
     // Send control message to output manager
-    g_message_bus.publishFloat(MSG_TRANS_OVERRUN_SOL, solenoid_power ? 1.0f : 0.0f, false);
+    g_message_bus.publishFloat(MSG_TRANS_OVERRUN_SOL, solenoid_power ? 1.0f : 0.0f);
     
     #ifdef ARDUINO
     Serial.print("Overrun clutch ");

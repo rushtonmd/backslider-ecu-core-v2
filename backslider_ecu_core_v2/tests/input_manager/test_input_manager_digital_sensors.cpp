@@ -204,7 +204,7 @@ TEST(digital_calibration_edge_cases) {
 // Test digital sensor reading and publishing - normal logic
 TEST(digital_sensor_reading_normal) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to digital sensor messages
@@ -243,7 +243,7 @@ TEST(digital_sensor_reading_normal) {
 // Test digital sensor reading and publishing - inverted logic
 TEST(digital_sensor_reading_inverted) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to digital sensor messages
@@ -282,7 +282,7 @@ TEST(digital_sensor_reading_inverted) {
 // Test digital sensor state changes
 TEST(digital_sensor_state_changes) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to digital sensor messages
@@ -319,7 +319,7 @@ TEST(digital_sensor_state_changes) {
 // Test basic digital sensor update timing (debounce protection)
 TEST(digital_sensor_timing) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to digital sensor messages
@@ -357,7 +357,7 @@ TEST(digital_sensor_timing) {
 // Test digital sensor debouncing for race car paddle shifters
 TEST(digital_sensor_debouncing) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to paddle messages
@@ -404,7 +404,7 @@ TEST(digital_sensor_debouncing) {
 // Test rapid paddle presses (race car specific scenario)
 TEST(digital_sensor_rapid_presses) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to paddle messages

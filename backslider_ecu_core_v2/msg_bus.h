@@ -109,12 +109,7 @@
 #include "msg_definitions.h"
 
 #ifdef ARDUINO
-    #include <FlexCAN_T4.h>
     #include <Arduino.h>
-    // Hardcoded for linter only (actual values come from FlexCAN_T4 library)
-    #ifndef CAN1
-        #define CAN1 (CAN_DEV_TABLE)0x401D0000  // Teensy 4.1 CAN1 address
-    #endif
 #else
     #include <iostream>
     #include <cstdio>
@@ -135,28 +130,27 @@ public:
     MessageBus();
     
     // Initialize the message bus
-    void init(bool enable_physical_can = false, uint32_t can_baud = 500000);
+    void init();
     
     // Subscribe to a message ID
     bool subscribe(uint32_t msg_id, MessageHandler handler);
     
-    // Publish a message (internal queue + optionally physical CAN)
-    bool publish(uint32_t msg_id, const void* data, uint8_t length, bool send_on_can = true);
+    // Publish a message to internal queue
+    bool publish(uint32_t msg_id, const void* data, uint8_t length);
     
     // Process all pending messages (call from main loop)
     void process();
     
     // Helper methods for common data types
-    bool publishFloat(uint32_t msg_id, float value, bool send_on_can = true);
-    bool publishUint32(uint32_t msg_id, uint32_t value, bool send_on_can = true);
-    bool publishUint16(uint32_t msg_id, uint16_t value, bool send_on_can = true);
-    bool publishUint8(uint32_t msg_id, uint8_t value, bool send_on_can = true);
+    bool publishFloat(uint32_t msg_id, float value);
+    bool publishUint32(uint32_t msg_id, uint32_t value);
+    bool publishUint16(uint32_t msg_id, uint16_t value);
+    bool publishUint8(uint32_t msg_id, uint8_t value);
     
     // Statistics and diagnostics
     uint32_t getMessagesProcessed() const { return messages_processed; }
     uint32_t getQueueOverflows() const { return queue_overflows; }
-    uint32_t getCANMessagesReceived() const { return can_messages_received; }
-    uint32_t getCANMessagesSent() const { return can_messages_sent; }
+
     uint16_t getSubscriberCount() const { return subscriber_count; }
     
     // Queue status
@@ -186,20 +180,6 @@ private:
     // Statistics
     uint32_t messages_processed;
     uint32_t queue_overflows;
-    uint32_t can_messages_received;
-    uint32_t can_messages_sent;
-    
-    #ifdef ARDUINO
-    // Physical CAN interface using FlexCAN_T4
-    FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> physical_can; 
-    bool physical_can_enabled;
-    
-    void init_physical_can(uint32_t baud);
-    void read_physical_can_messages();
-    void send_to_physical_can(const CANMessage& msg);
-    #else
-    bool physical_can_enabled = false;
-    #endif
     
     // Internal methods
     bool enqueue_internal_message(const CANMessage& msg);

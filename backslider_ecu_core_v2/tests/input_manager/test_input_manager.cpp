@@ -126,7 +126,7 @@ TEST(multiple_sensor_registration) {
 TEST(sensor_update_and_publishing) {
     // Reset mock environment and initialize systems
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     sensor_message_received = false;
     

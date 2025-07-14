@@ -38,7 +38,7 @@ typedef struct {
     uint8_t active_high;      // 1=active high, 0=active low
     uint8_t default_state;    // Default/safe state (0 or 1)
     uint8_t open_drain;       // 1=open drain, 0=push-pull
-} digital_config_t;
+} digital_output_config_t;
 
 // Analog output configuration (for DACs or PWM-filtered outputs)
 typedef struct {
@@ -70,7 +70,7 @@ typedef struct {
 // Union for output type-specific configuration
 typedef union {
     pwm_config_t pwm;
-    digital_config_t digital;
+            digital_output_config_t digital;
     analog_config_t analog;
     spi_config_t spi;
     virtual_config_t virtual_out;

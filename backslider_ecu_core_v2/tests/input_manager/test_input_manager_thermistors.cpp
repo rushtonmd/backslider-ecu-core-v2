@@ -324,7 +324,7 @@ TEST(table_interpolation_edge_cases) {
 // Test thermistor sensor reading and message publishing
 TEST(thermistor_reading_and_publishing) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to coolant temperature messages
@@ -389,7 +389,7 @@ TEST(thermistor_reading_and_publishing) {
 // Test multiple thermistor sensors publishing simultaneously
 TEST(multiple_thermistors_publishing) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to multiple temperature sensor messages
@@ -455,7 +455,7 @@ TEST(multiple_thermistors_publishing) {
 // Test thermistor response to changing temperatures
 TEST(thermistor_temperature_changes) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Subscribe to coolant temperature messages
@@ -496,7 +496,7 @@ TEST(thermistor_temperature_changes) {
 // Test thermistor sensor filtering (temperature sensors typically have heavy filtering)
 TEST(thermistor_filtering) {
     test_setup();
-    g_message_bus.init(false);
+    g_message_bus.init();
     input_manager_init();
     
     // Create CTS sensor with heavy filtering (typical for temperature sensors)
