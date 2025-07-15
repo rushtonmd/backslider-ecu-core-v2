@@ -9,7 +9,7 @@ ECU_SOURCES = ../main_application.cpp
 MOCK_SOURCES = mock_arduino.cpp
 
 # Test module directories
-TEST_MODULES = main_application message_bus fuel_module ignition_module sensors input_manager transmission_module output_manager external_serial external_canbus
+TEST_MODULES = main_application message_bus fuel_module ignition_module sensors input_manager transmission_module output_manager external_serial external_canbus storage_manager
 
 # Find all test files in module directories
 TEST_FILES = $(wildcard */test_*.cpp)
@@ -32,9 +32,9 @@ endef
 
 # Specific rules for modules that need additional sources
 
-# Main application now includes transmission module dependencies and external communications
-main_application/test_main_application: main_application/test_main_application.cpp ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp $(MOCK_SOURCES)
-	$(CXX) $(CXXFLAGS) -o $@ $< ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp $(MOCK_SOURCES)
+# Main application now includes transmission module dependencies, external communications, and storage manager
+main_application/test_main_application: main_application/test_main_application.cpp ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../storage_backend.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../storage_backend.cpp $(MOCK_SOURCES)
 
 fuel_module/test_%: fuel_module/test_%.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $< ../mod_fuel.cpp $(ECU_SOURCES)
@@ -88,6 +88,10 @@ external_serial/test_external_serial: external_serial/test_external_serial.cpp .
 external_canbus/test_%: external_canbus/test_%.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $< ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 
+# Storage manager tests need storage_manager, storage_backend, msg_bus, and mock_arduino
+storage_manager/test_%: storage_manager/test_%.cpp ../storage_manager.cpp ../storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../storage_manager.cpp ../storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+
 # Run all tests in a specific module
 run-main: $(wildcard main_application/test_*)
 	@echo "=== Running Main Application Tests ==="
@@ -127,6 +131,15 @@ run-external-serial: $(wildcard external_serial/test_*)
 
 run-external-canbus: $(wildcard external_canbus/test_*)
 	@echo "=== Running External CAN Bus Tests ==="
+	@for test in $^; do \
+		if [ -x "$$test" ] && [ "$${test##*.}" != "cpp" ]; then \
+			echo "Running $$test..."; \
+			./$$test || exit 1; \
+		fi; \
+	done
+
+run-storage-manager: $(wildcard storage_manager/test_*)
+	@echo "=== Running Storage Manager Tests ==="
 	@for test in $^; do \
 		if [ -x "$$test" ] && [ "$${test##*.}" != "cpp" ]; then \
 			echo "Running $$test..."; \
@@ -177,7 +190,8 @@ help:
 	@echo "  run-output-manager   - Run output manager tests only"
 	@echo "  run-external-serial  - Run external serial tests only"
 	@echo "  run-external-canbus  - Run external CAN bus tests only"
+	@echo "  run-storage-manager  - Run storage manager tests only"
 	@echo "  setup-dirs       - Create module directory structure"
 	@echo "  clean            - Remove all test executables"
 
-.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors run-input-manager run-transmission run-output-manager run-external-serial run-external-canbus setup-dirs clean help
+.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors run-input-manager run-transmission run-output-manager run-external-serial run-external-canbus run-storage-manager setup-dirs clean help

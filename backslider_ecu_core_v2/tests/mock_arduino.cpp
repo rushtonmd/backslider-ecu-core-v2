@@ -39,3 +39,5 @@ uint8_t mock_pin_modes[56] = {
     INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT,  // 40-49
     INPUT, INPUT, INPUT, INPUT, INPUT, INPUT                              // 50-55
 };
+
+// Note: Serial objects are defined in individual test files

@@ -169,6 +169,164 @@
 #define MSG_UNPACK_UINT16(msg) (*(uint16_t*)(msg)->buf)
 #define MSG_UNPACK_UINT8(msg) ((msg)->buf[0])
 
+// =============================================================================
+// STORAGE MESSAGE IDs
+// =============================================================================
+
+// Storage operation messages (0x600-0x60F range)
+#define MSG_STORAGE_SAVE_FLOAT      0x600   // Save float value to storage
+#define MSG_STORAGE_LOAD_FLOAT      0x601   // Load float value from storage
+#define MSG_STORAGE_SAVE_INT        0x602   // Save integer value to storage
+#define MSG_STORAGE_LOAD_INT        0x603   // Load integer value from storage
+#define MSG_STORAGE_DELETE_KEY      0x604   // Delete key from storage
+#define MSG_STORAGE_COMMIT_CACHE    0x605   // Force commit of dirty cache entries
+
+// Storage response messages (0x610-0x61F range)
+#define MSG_STORAGE_SAVE_RESPONSE   0x610   // Response to save operation
+#define MSG_STORAGE_LOAD_RESPONSE   0x611   // Response to load operation
+#define MSG_STORAGE_ERROR           0x612   // Storage operation error
+#define MSG_STORAGE_STATS           0x613   // Storage system statistics
+
+// Storage export messages (0x620-0x62F range)
+#define MSG_STORAGE_EXPORT_REQUEST  0x620   // Request data export
+#define MSG_STORAGE_EXPORT_START    0x621   // Export starting
+#define MSG_STORAGE_EXPORT_KEY      0x622   // Individual key-value export
+#define MSG_STORAGE_EXPORT_COMPLETE 0x623   // Export complete
+#define MSG_STORAGE_EXPORT_ERROR    0x624   // Export error
+
+// =============================================================================
+// STORAGE MESSAGE DATA STRUCTURES
+// =============================================================================
+
+// Storage save float message (8 bytes total)
+typedef struct {
+    uint16_t key_hash;          // CRC16 hash of key string (2 bytes)
+    float value;                // Value to store (4 bytes)
+    uint8_t priority;           // 0=cache, 1=immediate write (1 byte)
+    uint8_t sender_id;          // Module ID that sent this request (1 byte)
+} __attribute__((packed)) storage_save_float_msg_t;
+
+// Storage load float message (8 bytes total)
+typedef struct {
+    uint16_t key_hash;          // CRC16 hash of key string (2 bytes)
+    float default_value;        // Default value if key not found (4 bytes)
+    uint8_t sender_id;          // Module ID that sent this request (1 byte)
+    uint8_t request_id;         // For matching responses (1 byte)
+} __attribute__((packed)) storage_load_float_msg_t;
+
+// Storage load response message (8 bytes total)
+typedef struct {
+    uint16_t key_hash;          // CRC16 hash of key string (2 bytes)
+    float value;                // Retrieved value (4 bytes)
+    uint8_t success;            // 1=success, 0=not found (1 byte)
+    uint8_t request_id;         // Matching request ID (1 byte)
+} __attribute__((packed)) storage_load_response_msg_t;
+
+// Storage save response message (4 bytes total)
+typedef struct {
+    uint16_t key_hash;          // CRC16 hash of key string (2 bytes)
+    uint8_t success;            // 1=success, 0=failed (1 byte)
+    uint8_t sender_id;          // Module ID that requested this (1 byte)
+} __attribute__((packed)) storage_save_response_msg_t;
+
+// Storage error message (4 bytes total)
+typedef struct {
+    uint16_t key_hash;          // CRC16 hash of key string (2 bytes)
+    uint8_t error_code;         // Error code (0=success, others=error) (1 byte)
+    uint8_t sender_id;          // Module ID that requested this (1 byte)
+} __attribute__((packed)) storage_error_msg_t;
+
+// Storage statistics message
+typedef struct {
+    uint32_t cache_hits;        // Number of cache hits
+    uint32_t cache_misses;      // Number of cache misses
+    uint32_t disk_writes;       // Number of disk writes
+    uint32_t disk_reads;        // Number of disk reads
+    uint16_t cache_size;        // Current cache entries
+    uint16_t free_space_kb;     // Free storage space (KB)
+} storage_stats_msg_t;
+
+// Storage export request message
+typedef struct {
+    uint8_t export_type;        // 0=all, 1=fuel_map, 2=ignition_map, 3=settings
+    char filter[24];            // Optional key filter pattern
+    uint8_t sender_id;          // Module ID requesting export
+    uint8_t request_id;         // For tracking this export
+} storage_export_request_msg_t;
+
+// Storage export start message
+typedef struct {
+    uint16_t total_keys;        // Total number of keys to export
+    uint8_t request_id;         // Matching request ID
+    uint8_t success;            // 1=ready, 0=error
+} storage_export_start_msg_t;
+
+// Storage export key-value message
+typedef struct {
+    char key[32];               // Storage key
+    float value;                // Value
+    uint16_t sequence_number;   // Order in export (0-based)
+    uint8_t request_id;         // Matching request ID
+} storage_export_key_msg_t;
+
+// Storage export complete message
+typedef struct {
+    uint16_t keys_sent;         // Actual number of keys sent
+    uint8_t request_id;         // Matching request ID
+    uint8_t success;            // 1=complete, 0=error
+} storage_export_complete_msg_t;
+
+// Storage error codes
+#define STORAGE_ERROR_SUCCESS           0x00
+#define STORAGE_ERROR_KEY_NOT_FOUND     0x01
+#define STORAGE_ERROR_STORAGE_FULL      0x02
+#define STORAGE_ERROR_WRITE_FAILED      0x03
+#define STORAGE_ERROR_READ_FAILED       0x04
+#define STORAGE_ERROR_INVALID_KEY       0x05
+#define STORAGE_ERROR_CACHE_FULL        0x06
+
+// CRC16 function for key hashing
+inline uint16_t crc16(const char* data) {
+    uint16_t crc = 0xFFFF;
+    while (*data) {
+        crc ^= (uint16_t)*data++;
+        for (int i = 0; i < 8; i++) {
+            if (crc & 1) {
+                crc = (crc >> 1) ^ 0xA001;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    return crc;
+}
+
+// Helper macros for storage messages
+#define MSG_PACK_STORAGE_SAVE_FLOAT(msg, k, v, p, s) do { \
+    storage_save_float_msg_t data = {0}; \
+    data.key_hash = crc16(k); \
+    data.value = (v); \
+    data.priority = (p); \
+    data.sender_id = (s); \
+    (msg)->len = sizeof(storage_save_float_msg_t); \
+    memcpy((msg)->buf, &data, sizeof(storage_save_float_msg_t)); \
+} while(0)
+
+#define MSG_PACK_STORAGE_LOAD_FLOAT(msg, k, d, s, r) do { \
+    storage_load_float_msg_t data = {0}; \
+    data.key_hash = crc16(k); \
+    data.default_value = (d); \
+    data.sender_id = (s); \
+    data.request_id = (r); \
+    (msg)->len = sizeof(storage_load_float_msg_t); \
+    memcpy((msg)->buf, &data, sizeof(storage_load_float_msg_t)); \
+} while(0)
+
+#define MSG_UNPACK_STORAGE_SAVE_FLOAT(msg) ((storage_save_float_msg_t*)(msg)->buf)
+#define MSG_UNPACK_STORAGE_LOAD_FLOAT(msg) ((storage_load_float_msg_t*)(msg)->buf)
+#define MSG_UNPACK_STORAGE_LOAD_RESPONSE(msg) ((storage_load_response_msg_t*)(msg)->buf)
+#define MSG_UNPACK_STORAGE_SAVE_RESPONSE(msg) ((storage_save_response_msg_t*)(msg)->buf)
+
 // Message handler function pointer type
 typedef void (*MessageHandler)(const CANMessage* msg);
 

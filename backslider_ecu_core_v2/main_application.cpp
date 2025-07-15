@@ -20,6 +20,10 @@ extern MockSerial Serial1; // Additional serial port for external communications
 // #include "engine_sensors.h"  // TODO: Create engine_sensors.h when ready
 // #include "transmission_sensors.h"  // TODO: Create transmission_sensors.h when ready
 
+MainApplication::MainApplication() : storage_manager(&storage_backend) {
+    // Constructor initializes storage manager with backend
+}
+
 void MainApplication::init() {
     loop_count = 0;
     last_loop_time_us = 0;
@@ -38,6 +42,14 @@ void MainApplication::init() {
     // Initialize message bus (internal messaging only for now)
     Serial.println("Initializing message bus...");
     g_message_bus.init();  // false = no physical CAN bus yet
+    
+    // Initialize storage manager
+    Serial.println("Initializing storage manager...");
+    if (storage_manager.init()) {
+        Serial.println("Storage manager initialized successfully");
+    } else {
+        Serial.println("WARNING: Storage manager initialization failed");
+    }
     
     // Initialize input manager
     Serial.println("Initializing input manager...");
@@ -117,6 +129,9 @@ void MainApplication::run() {
     
     // Process message bus (route sensor data to modules)
     g_message_bus.process();
+
+    // Update storage manager (handle storage operations and cache management)
+    storage_manager.update();
 
     // Update output manager (controls all physical outputs)
     output_manager_update();
@@ -204,7 +219,7 @@ void MainApplication::printStatusReport() {
     Serial.print("Cache size: ");
     Serial.println(g_external_canbus.get_cache_size());
 
-    // Transmission statistics
+        // Transmission statistics
     Serial.print("Current gear: ");
     Serial.println(transmission_gear_to_string(transmission_get_state()->current_gear));
     Serial.print("Fluid temperature: ");
@@ -212,6 +227,16 @@ void MainApplication::printStatusReport() {
     Serial.println("°C");
     Serial.print("Transmission shifts: ");
     Serial.println(transmission_get_shift_count());
-    
+
+    // Storage system statistics
+    Serial.print("Storage cache hits: ");
+    Serial.println(storage_manager.get_cache_hits());
+    Serial.print("Storage cache misses: ");
+    Serial.println(storage_manager.get_cache_misses());
+    Serial.print("Storage disk writes: ");
+    Serial.println(storage_manager.get_disk_writes());
+    Serial.print("Storage disk reads: ");
+    Serial.println(storage_manager.get_disk_reads());
+
     Serial.println("========================");
 }
