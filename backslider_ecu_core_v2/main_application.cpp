@@ -151,11 +151,9 @@ void MainApplication::run() {
     }
     
     #ifdef ARDUINO
-    // Heartbeat LED - quick flash every 1000 loops
+    // Heartbeat LED - non-blocking toggle every 1000 loops (no delays)
     if (loop_count % 1000 == 0) {
-        digitalWrite(LED_BUILTIN, HIGH);
-        delayMicroseconds(50);  // Very brief flash
-        digitalWrite(LED_BUILTIN, LOW);
+        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));  // Toggle LED state
     }
     #endif
 }
