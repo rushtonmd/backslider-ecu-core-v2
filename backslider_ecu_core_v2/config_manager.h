@@ -15,6 +15,7 @@ private:
     static const char* CONFIG_KEY_ECU_NAME;
     static const char* CONFIG_KEY_SERIAL_NUMBER;
     static const char* CONFIG_KEY_FIRMWARE_VERSION;
+    static const char* CONFIG_KEY_BOOT_TIMEOUT;
     
     // Helper methods
     bool loadDefaultConfiguration();

@@ -13,6 +13,7 @@ const char* ConfigManager::CONFIG_KEY_ECU_TYPE = "cfg_ecu_type";
 const char* ConfigManager::CONFIG_KEY_ECU_NAME = "cfg_ecu_name";
 const char* ConfigManager::CONFIG_KEY_SERIAL_NUMBER = "cfg_serial_num";
 const char* ConfigManager::CONFIG_KEY_FIRMWARE_VERSION = "cfg_fw_ver";
+const char* ConfigManager::CONFIG_KEY_BOOT_TIMEOUT = "cfg_boot_timeout";
 
 ConfigManager::ConfigManager(StorageManager* storage_mgr) 
     : storage(storage_mgr), config_loaded(false) {
@@ -87,6 +88,7 @@ bool ConfigManager::loadConfigurationFromStorage() {
         storage->load_data(CONFIG_KEY_ECU_NAME, current_config.ecu_name, sizeof(current_config.ecu_name));
         storage->load_data(CONFIG_KEY_SERIAL_NUMBER, &current_config.serial_number, sizeof(current_config.serial_number));
         storage->load_data(CONFIG_KEY_FIRMWARE_VERSION, current_config.firmware_version, sizeof(current_config.firmware_version));
+        storage->load_data(CONFIG_KEY_BOOT_TIMEOUT, &current_config.boot_timeout_ms, sizeof(current_config.boot_timeout_ms));
         
         return true;
     }
@@ -105,6 +107,7 @@ bool ConfigManager::saveConfigurationToStorage() {
     success &= storage->save_data(CONFIG_KEY_ECU_NAME, current_config.ecu_name, sizeof(current_config.ecu_name));
     success &= storage->save_data(CONFIG_KEY_SERIAL_NUMBER, &current_config.serial_number, sizeof(current_config.serial_number));
     success &= storage->save_data(CONFIG_KEY_FIRMWARE_VERSION, current_config.firmware_version, sizeof(current_config.firmware_version));
+    success &= storage->save_data(CONFIG_KEY_BOOT_TIMEOUT, &current_config.boot_timeout_ms, sizeof(current_config.boot_timeout_ms));
     
     return success;
 }

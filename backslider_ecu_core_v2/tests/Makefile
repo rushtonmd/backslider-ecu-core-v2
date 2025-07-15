@@ -9,7 +9,7 @@ ECU_SOURCES = ../main_application.cpp
 MOCK_SOURCES = mock_arduino.cpp
 
 # Test module directories
-TEST_MODULES = main_application message_bus fuel_module ignition_module sensors input_manager transmission_module output_manager external_serial external_canbus storage_manager
+TEST_MODULES = main_application message_bus fuel_module ignition_module sensors input_manager transmission_module output_manager external_serial external_canbus storage_manager config_manager
 
 # Find all test files in module directories
 TEST_FILES = $(wildcard */test_*.cpp)
@@ -92,6 +92,10 @@ external_canbus/test_%: external_canbus/test_%.cpp ../external_canbus.cpp ../ext
 storage_manager/test_%: storage_manager/test_%.cpp ../storage_manager.cpp ../storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $< ../storage_manager.cpp ../storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 
+# Config manager tests need config_manager, storage_manager, storage_backend, ecu_config, msg_bus, and mock_arduino
+config_manager/test_%: config_manager/test_%.cpp ../config_manager.cpp ../storage_manager.cpp ../storage_backend.cpp ../ecu_config.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../config_manager.cpp ../storage_manager.cpp ../storage_backend.cpp ../ecu_config.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+
 # Run all tests in a specific module
 run-main: $(wildcard main_application/test_*)
 	@echo "=== Running Main Application Tests ==="
@@ -147,6 +151,15 @@ run-storage-manager: $(wildcard storage_manager/test_*)
 		fi; \
 	done
 
+run-config-manager: $(wildcard config_manager/test_*)
+	@echo "=== Running Config Manager Tests ==="
+	@for test in $^; do \
+		if [ -x "$$test" ] && [ "$${test##*.}" != "cpp" ]; then \
+			echo "Running $$test..."; \
+			./$$test || exit 1; \
+		fi; \
+	done
+
 # Run all tests
 test: $(TEST_TARGETS)
 	@echo "=== Running All ECU Tests ==="
@@ -191,7 +204,8 @@ help:
 	@echo "  run-external-serial  - Run external serial tests only"
 	@echo "  run-external-canbus  - Run external CAN bus tests only"
 	@echo "  run-storage-manager  - Run storage manager tests only"
+	@echo "  run-config-manager   - Run config manager tests only"
 	@echo "  setup-dirs       - Create module directory structure"
 	@echo "  clean            - Remove all test executables"
 
-.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors run-input-manager run-transmission run-output-manager run-external-serial run-external-canbus run-storage-manager setup-dirs clean help
+.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors run-input-manager run-transmission run-output-manager run-external-serial run-external-canbus run-storage-manager run-config-manager setup-dirs clean help
