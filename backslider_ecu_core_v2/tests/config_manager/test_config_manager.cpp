@@ -307,15 +307,15 @@ bool test_spi_configuration() {
     print_test_result("SPI MISO pin", spi_config.miso_pin == 12);
     print_test_result("SPI SCK pin", spi_config.sck_pin == 13);
     
-    // Test QSPI flash configuration
+    // Test external SPI flash configuration
     const SPIDeviceConfig& qspi_config = config_manager.getQSPIFlashConfig();
-    print_test_result("QSPI CS pin", qspi_config.cs_pin == 6);
-    print_test_result("QSPI frequency", qspi_config.frequency == 50000000);
-    print_test_result("QSPI enabled", qspi_config.enabled == true);
+    print_test_result("External flash CS pin", qspi_config.cs_pin == 10);
+    print_test_result("External flash frequency", qspi_config.frequency == 25000000);
+    print_test_result("External flash enabled", qspi_config.enabled == true);
     
     return spi_config.mosi_pin == 11 && spi_config.miso_pin == 12 &&
-           spi_config.sck_pin == 13 && qspi_config.cs_pin == 6 &&
-           qspi_config.frequency == 50000000 && qspi_config.enabled;
+           spi_config.sck_pin == 13 && qspi_config.cs_pin == 10 &&
+           qspi_config.frequency == 25000000 && qspi_config.enabled;
 }
 
 // Main test runner

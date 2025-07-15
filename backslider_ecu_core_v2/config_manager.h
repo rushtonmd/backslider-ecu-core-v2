@@ -37,8 +37,6 @@ public:
     uint32_t getSerialNumber() const { return current_config.serial_number; }
     
     // Pin access helpers
-    uint8_t getQSPICSPin() const { return current_config.pins.qspi_cs_pin; }
-    uint8_t getQSPISCKPin() const { return current_config.pins.qspi_sck_pin; }
     uint8_t getI2CSDAPin() const { return current_config.pins.i2c_sda_pin; }
     uint8_t getI2CSCLPin() const { return current_config.pins.i2c_scl_pin; }
     uint8_t getCANTXPin() const { return current_config.pins.can_tx_pin; }

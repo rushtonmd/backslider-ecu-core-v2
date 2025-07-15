@@ -19,14 +19,6 @@ enum ECUType : uint8_t {
 // CRITICAL PIN ASSIGNMENTS
 // =============================================================================
 struct CriticalPinConfig {
-    // QSPI Flash Memory (W25Q128)
-    uint8_t qspi_cs_pin;
-    uint8_t qspi_sck_pin;
-    uint8_t qspi_io0_pin;
-    uint8_t qspi_io1_pin;
-    uint8_t qspi_io2_pin;
-    uint8_t qspi_io3_pin;
-    
     // I2C Bus (Wire - primary I2C)
     uint8_t i2c_sda_pin;
     uint8_t i2c_scl_pin;

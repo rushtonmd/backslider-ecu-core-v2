@@ -120,11 +120,6 @@ bool ConfigManager::validateConfiguration() {
     }
     
     // Validate pin assignments (basic checks)
-    if (current_config.pins.qspi_cs_pin > 39) {
-        Serial.println("ERROR: Invalid QSPI CS pin");
-        return false;
-    }
-    
     if (current_config.pins.i2c_sda_pin > 39 || current_config.pins.i2c_scl_pin > 39) {
         Serial.println("ERROR: Invalid I2C pin assignment");
         return false;
@@ -165,8 +160,6 @@ void ConfigManager::printConfiguration() {
     Serial.println(current_config.serial_number, HEX);
     
     Serial.println("\n--- Pin Assignments ---");
-    Serial.print("QSPI CS: ");
-    Serial.println(current_config.pins.qspi_cs_pin);
     Serial.print("I2C SDA: ");
     Serial.print(current_config.pins.i2c_sda_pin);
     Serial.print(", SCL: ");

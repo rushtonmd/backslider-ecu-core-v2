@@ -19,26 +19,19 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
     
     // TEENSY 4.0 PIN ALLOCATION SUMMARY (24 total pins: 0-23)
     // =====================================================
-    // Used Pins: 0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18, 19, 22, 23 (17 pins)
+    // Used Pins: 0, 1, 2, 3, 10, 11, 12, 13, 18, 19, 22, 23 (12 pins)
     // 
-    // Available Pins: 2, 3, 15, 16, 17, 20, 21 (7 pins)
+    // Available Pins: 4, 5, 6, 7, 8, 9, 14, 15, 16, 17, 20, 21 (12 pins)
     // 
     // Special Function Pins Available:
-    // - Pin 2, 3: Interrupt-capable pins
+    // - Pin 4, 5: General I/O
+    // - Pin 6, 7, 8, 9, 14: Built-in QSPI flash pins (available for other use)
     // - Pin 15, 16, 17: Analog inputs (A1, A2, A3)
     // - Pin 20, 21: Additional I2C (Wire1) - SDA1, SCL1
     //
-    // Note: All remaining pins (2, 3, 15-17, 20, 21) can be used for general I/O
+    // Note: Pin 13 is built-in LED and SPI SCK - choose usage carefully
     
     .pins = {
-        // QSPI Flash Memory (W25Q128) - Standard Teensy 4.0 QSPI pins
-        .qspi_cs_pin = 6,
-        .qspi_sck_pin = 14,
-        .qspi_io0_pin = 8,
-        .qspi_io1_pin = 7,
-        .qspi_io2_pin = 9,
-        .qspi_io3_pin = 10,
-        
         // I2C Bus (Wire - primary I2C) - Standard Teensy 4.0 I2C pins
         .i2c_sda_pin = 18,
         .i2c_scl_pin = 19,
@@ -46,17 +39,17 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
         // External Serial - User specified pins
         .ext_serial_tx_pin = 22,
         .ext_serial_rx_pin = 23,
-        .ext_serial_rts_pin = 4,   // Optional flow control
-        .ext_serial_cts_pin = 5,   // Optional flow control
+        // .ext_serial_rts_pin = 4,   // Optional flow control
+        // .ext_serial_cts_pin = 5,   // Optional flow control
         
         // External CAN Bus - User specified pins
         .can_tx_pin = 0,
         .can_rx_pin = 1,
         
         // Status LEDs
-        .status_led_pin = 13,      // Built-in LED
-        .error_led_pin = 12,       // External red LED
-        .activity_led_pin = 11     // External green LED
+        .status_led_pin = 13,      // Built-in LED (note: conflicts with SPI SCK when using SPI)
+        .error_led_pin = 2,        // External red LED (available pin)
+        .activity_led_pin = 3      // External green LED (available pin)
     },
     
     .i2c = {
@@ -83,19 +76,19 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
         },
         
         // Future I2C devices
-        .rtc = {
-            .address = 0x68,       // DS3231 RTC
-            .frequency = 100000,   // 100kHz (slower for RTC)
-            .enabled = false,      // Disabled for now
-            .timeout_ms = 100
-        },
+        // .rtc = {
+        //     .address = 0x68,       // DS3231 RTC
+        //     .frequency = 100000,   // 100kHz (slower for RTC)
+        //     .enabled = false,      // Disabled for now
+        //     .timeout_ms = 100
+        // },
         
-        .eeprom = {
-            .address = 0x50,       // 24LC256 EEPROM
-            .frequency = 100000,   // 100kHz (slower for EEPROM)
-            .enabled = false,      // Disabled for now
-            .timeout_ms = 200
-        }
+        // .eeprom = {
+        //     .address = 0x50,       // 24LC256 EEPROM
+        //     .frequency = 100000,   // 100kHz (slower for EEPROM)
+        //     .enabled = false,      // Disabled for now
+        //     .timeout_ms = 200
+        // }
     },
     
     .spi = {
@@ -104,39 +97,40 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
         .miso_pin = 12,
         .sck_pin = 13,
         
-        // QSPI Flash (W25Q128) - 128 MBit / 16 MByte
+        // External SPI Flash (W25Q128) - 128 MBit / 16 MByte
+        // Note: Uses regular SPI bus, not built-in QSPI
         .qspi_flash = {
-            .cs_pin = 6,           // Same as qspi_cs_pin
-            .frequency = 50000000, // 50MHz - conservative speed
+            .cs_pin = 10,          // SPI CS pin (available pin)
+            .frequency = 25000000, // 25MHz - conservative for external flash
             .mode = 0,             // SPI Mode 0
             .bit_order = MSBFIRST, // MSB first
-            .enabled = true        // Enable QSPI flash
+            .enabled = true        // Enable external flash
         },
         
         // Future SPI devices
-        .sd_card = {
-            .cs_pin = 10,          // Future SD card
-            .frequency = 25000000, // 25MHz
-            .mode = 0,
-            .bit_order = MSBFIRST,
-            .enabled = false       // Disabled for now
-        },
+        // .sd_card = {
+        //     .cs_pin = 10,          // Future SD card
+        //     .frequency = 25000000, // 25MHz
+        //     .mode = 0,
+        //     .bit_order = MSBFIRST,
+        //     .enabled = false       // Disabled for now
+        // },
         
-        .can_controller = {
-            .cs_pin = 9,           // Future MCP2515 CAN controller
-            .frequency = 8000000,  // 8MHz
-            .mode = 0,
-            .bit_order = MSBFIRST,
-            .enabled = false       // Disabled for now
-        },
+        // .can_controller = {
+        //     .cs_pin = 9,           // Future MCP2515 CAN controller
+        //     .frequency = 8000000,  // 8MHz
+        //     .mode = 0,
+        //     .bit_order = MSBFIRST,
+        //     .enabled = false       // Disabled for now
+        // },
         
-        .pwm_controller = {
-            .cs_pin = 8,           // Future TLC59711 PWM controller
-            .frequency = 10000000, // 10MHz
-            .mode = 0,
-            .bit_order = MSBFIRST,
-            .enabled = false       // Disabled for now
-        }
+        // .pwm_controller = {
+        //     .cs_pin = 8,           // Future TLC59711 PWM controller
+        //     .frequency = 10000000, // 10MHz
+        //     .mode = 0,
+        //     .bit_order = MSBFIRST,
+        //     .enabled = false       // Disabled for now
+        // }
     },
     
     // Boot behavior
