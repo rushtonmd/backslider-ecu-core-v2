@@ -7,6 +7,7 @@ extern MockSerial Serial;  // Use the Serial object from the test environment
 extern MockSerial Serial1; // Additional serial port for external communications
 #else
 #include <Arduino.h>
+#include <Wire.h>
 #endif
 
 #include "main_application.h"
@@ -20,8 +21,8 @@ extern MockSerial Serial1; // Additional serial port for external communications
 // #include "engine_sensors.h"  // TODO: Create engine_sensors.h when ready
 // #include "transmission_sensors.h"  // TODO: Create transmission_sensors.h when ready
 
-MainApplication::MainApplication() : storage_manager(&storage_backend) {
-    // Constructor initializes storage manager with backend
+MainApplication::MainApplication() : storage_manager(&storage_backend), config_manager(&storage_manager) {
+    // Constructor initializes storage manager with backend and config manager with storage manager
 }
 
 void MainApplication::init() {
@@ -50,6 +51,38 @@ void MainApplication::init() {
     } else {
         Serial.println("WARNING: Storage manager initialization failed");
     }
+    
+    // Initialize configuration manager - MUST BE FIRST after storage
+    Serial.println("Initializing configuration manager...");
+    if (!config_manager.initialize()) {
+        Serial.println("CRITICAL ERROR: Configuration manager initialization failed");
+        return;
+    }
+    
+    // Get configuration for system initialization
+    const ECUConfiguration& config = config_manager.getConfig();
+    
+    #ifdef ARDUINO
+    // Initialize I2C with loaded configuration
+    // Note: Teensy 4.0 uses fixed pins (SDA=18, SCL=19)
+    Serial.print("Initializing I2C: SDA=18, SCL=19");
+    Serial.print(", Freq=");
+    Serial.print(config.i2c.bus_frequency);
+    Serial.println("Hz");
+    
+    Wire.begin();
+    Wire.setClock(config.i2c.bus_frequency);
+    
+    // Initialize status LEDs with loaded configuration
+    pinMode(config.pins.status_led_pin, OUTPUT);
+    pinMode(config.pins.error_led_pin, OUTPUT);  
+    pinMode(config.pins.activity_led_pin, OUTPUT);
+    
+    // Set initial LED states
+    digitalWrite(config.pins.status_led_pin, HIGH);   // Status ON during init
+    digitalWrite(config.pins.error_led_pin, LOW);     // Error OFF
+    digitalWrite(config.pins.activity_led_pin, LOW);  // Activity OFF
+    #endif
     
     // Initialize input manager
     Serial.println("Initializing input manager...");
@@ -114,7 +147,9 @@ void MainApplication::init() {
     // uint8_t trans_sensors_registered = transmission_sensors_init();
     
     #ifdef ARDUINO
-    digitalWrite(LED_BUILTIN, LOW);  // Turn off LED when initialization complete
+    // Turn off status LED and turn on activity LED when initialization complete
+    digitalWrite(config.pins.status_led_pin, LOW);      // Status OFF (init complete)
+    digitalWrite(config.pins.activity_led_pin, HIGH);   // Activity ON (running)
     #endif
     
     Serial.println("=== ECU Initialization Complete ===");

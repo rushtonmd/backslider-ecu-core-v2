@@ -476,6 +476,63 @@ public:
 };
 
 // =============================================================================
+// MOCK WIRE (I2C) IMPLEMENTATION
+// =============================================================================
+
+class MockWire {
+public:
+    void begin() {
+        // Mock I2C initialization (default pins)
+    }
+    
+    void begin(uint8_t sda_pin, uint8_t scl_pin) {
+        // Mock I2C initialization
+        (void)sda_pin;
+        (void)scl_pin;
+    }
+    
+    void setClock(uint32_t frequency) {
+        // Mock I2C clock setting
+        (void)frequency;
+    }
+    
+    void beginTransmission(uint8_t address) {
+        // Mock I2C transmission start
+        (void)address;
+    }
+    
+    uint8_t endTransmission() {
+        // Mock I2C transmission end
+        return 0;  // Success
+    }
+    
+    uint8_t requestFrom(uint8_t address, uint8_t quantity) {
+        // Mock I2C request
+        (void)address;
+        (void)quantity;
+        return 0;  // No data available
+    }
+    
+    size_t write(uint8_t data) {
+        // Mock I2C write
+        (void)data;
+        return 1;  // Success
+    }
+    
+    int available() {
+        // Mock I2C available
+        return 0;  // No data
+    }
+    
+    int read() {
+        // Mock I2C read
+        return 0;  // No data
+    }
+};
+
+extern MockWire Wire;
+
+// =============================================================================
 // FORMAT CONSTANTS
 // =============================================================================
 

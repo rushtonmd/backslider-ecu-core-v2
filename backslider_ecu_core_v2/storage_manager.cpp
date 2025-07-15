@@ -337,6 +337,34 @@ bool StorageManager::load_float(const char* key, float* value, float default_val
     return false;
 }
 
+bool StorageManager::save_data(const char* key, const void* data, size_t size) {
+    if (!key || !data || size == 0) return false;
+    
+    uint16_t key_hash = crc16(key);
+    
+    // Write to backend immediately
+    if (backend->writeData(key_hash, data, size)) {
+        disk_writes++;
+        return true;
+    }
+    
+    return false;
+}
+
+bool StorageManager::load_data(const char* key, void* data, size_t size) {
+    if (!key || !data || size == 0) return false;
+    
+    uint16_t key_hash = crc16(key);
+    
+    // Load from backend
+    if (backend->readData(key_hash, data, size)) {
+        disk_reads++;
+        return true;
+    }
+    
+    return false;
+}
+
 // =============================================================================
 // Debug/Maintenance Methods
 // =============================================================================

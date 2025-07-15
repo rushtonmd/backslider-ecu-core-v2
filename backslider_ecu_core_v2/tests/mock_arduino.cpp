@@ -40,4 +40,10 @@ uint8_t mock_pin_modes[56] = {
     INPUT, INPUT, INPUT, INPUT, INPUT, INPUT                              // 50-55
 };
 
+// =============================================================================
+// MOCK WIRE (I2C) IMPLEMENTATION
+// =============================================================================
+
+MockWire Wire;
+
 // Note: Serial objects are defined in individual test files

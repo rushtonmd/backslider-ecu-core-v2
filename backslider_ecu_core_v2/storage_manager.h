@@ -74,6 +74,10 @@ public:
     bool save_float(const char* key, float value);
     bool load_float(const char* key, float* value, float default_value = 0.0f);
     
+    // Generic data access (for configuration data)
+    bool save_data(const char* key, const void* data, size_t size);
+    bool load_data(const char* key, void* data, size_t size);
+    
     // Statistics
     uint32_t get_cache_hits() const { return cache_hits; }
     uint32_t get_cache_misses() const { return cache_misses; }

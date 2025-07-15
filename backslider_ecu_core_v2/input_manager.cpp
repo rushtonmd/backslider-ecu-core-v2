@@ -414,8 +414,10 @@ static void configure_sensor_pin(const sensor_definition_t* sensor, uint8_t sens
             pinMode(sensor->pin, INPUT);
             // Register interrupt-based counter if requested
             if (sensor->config.frequency.use_interrupts) {
+                #ifdef ARDUINO
                 register_interrupt_frequency_counter(sensor_index, sensor->pin, 
                                                    sensor->config.frequency.trigger_edge);
+                #endif
             }
             break;
             
@@ -793,6 +795,7 @@ static void (*freq_counter_isr_functions[])(void) = {
 };
 #endif
 
+#ifdef ARDUINO
 static int8_t register_interrupt_frequency_counter(uint8_t sensor_index, uint8_t pin, uint8_t edge) {
     if (interrupt_freq_counter_count >= MAX_INTERRUPT_FREQ_COUNTERS) {
         return -1;  // No more slots available
@@ -855,7 +858,9 @@ static int8_t register_interrupt_frequency_counter(uint8_t sensor_index, uint8_t
     // - digitalPinToInterrupt(pin): Converts pin number to interrupt number
     // - freq_counter_isr_functions[counter_id]: Dedicated ISR function
     // - interrupt_mode: When to trigger (RISING/FALLING/CHANGE)
+    #ifndef TESTING
     attachInterrupt(digitalPinToInterrupt(pin), freq_counter_isr_functions[counter_id], interrupt_mode);
+    #endif
     
     Serial.print("Registered interrupt frequency counter ");
     Serial.print(counter_id);
@@ -872,6 +877,11 @@ static int8_t register_interrupt_frequency_counter(uint8_t sensor_index, uint8_t
     interrupt_freq_counter_count++;
     return counter_id;
 }
+#else
+static int8_t register_interrupt_frequency_counter(uint8_t sensor_index, uint8_t pin, uint8_t edge) {
+    return -1;  // Not supported in testing environment
+}
+#endif
 
 static uint32_t measure_frequency_interrupt(uint8_t sensor_index) {
     // Find the interrupt counter for this sensor
