@@ -8,6 +8,8 @@ extern MockSerial Serial1; // Additional serial port for external communications
 #else
 #include <Arduino.h>
 #include <Wire.h>
+#include <Adafruit_ADS1X15.h>
+#include <Adafruit_MCP23X17.h>
 #endif
 
 #include "main_application.h"
@@ -21,6 +23,12 @@ extern MockSerial Serial1; // Additional serial port for external communications
 #include "ecu_config.h"
 // #include "engine_sensors.h"  // TODO: Create engine_sensors.h when ready
 // #include "transmission_sensors.h"  // TODO: Create transmission_sensors.h when ready
+
+// I2C Device Objects
+#ifdef ARDUINO
+Adafruit_ADS1015 ads1015;
+Adafruit_MCP23X17 mcp;
+#endif
 
 MainApplication::MainApplication() : storage_manager(&storage_backend), config_manager(&storage_manager) {
     // Constructor initializes storage manager with backend and config manager with storage manager
@@ -73,6 +81,48 @@ void MainApplication::init() {
     
     Wire.begin();
     Wire.setClock(config.i2c.bus_frequency);
+    
+    // Initialize ADS1015 ADC if enabled
+    if (config.i2c.adc.enabled) {
+        Serial.print("Initializing ADS1015 ADC at address 0x");
+        Serial.print(config.i2c.adc.address, HEX);
+        Serial.print(" (freq=");
+        Serial.print(config.i2c.adc.frequency);
+        Serial.println("Hz)");
+        
+        if (!ads1015.begin(config.i2c.adc.address)) {
+            Serial.println("ERROR: Failed to initialize ADS1015 ADC!");
+            digitalWrite(config.pins.error_led_pin, HIGH);  // Turn on error LED
+        } else {
+            Serial.println("ADS1015 ADC initialized successfully");
+            // Configure ADS1015 for single-ended readings
+            ads1015.setGain(GAIN_TWOTHIRDS);  // ±6.144V range
+        }
+    } else {
+        Serial.println("ADS1015 ADC disabled in configuration");
+    }
+    
+    // Initialize MCP23017 GPIO expander if enabled
+    if (config.i2c.gpio_expander.enabled) {
+        Serial.print("Initializing MCP23017 GPIO expander at address 0x");
+        Serial.print(config.i2c.gpio_expander.address, HEX);
+        Serial.print(" (freq=");
+        Serial.print(config.i2c.gpio_expander.frequency);
+        Serial.println("Hz)");
+        
+        if (!mcp.begin_I2C(config.i2c.gpio_expander.address)) {
+            Serial.println("ERROR: Failed to initialize MCP23017 GPIO expander!");
+            digitalWrite(config.pins.error_led_pin, HIGH);  // Turn on error LED
+        } else {
+            Serial.println("MCP23017 GPIO expander initialized successfully");
+            // Configure all pins as inputs with pullup by default
+            for (int i = 0; i < 16; i++) {
+                mcp.pinMode(i, INPUT_PULLUP);
+            }
+        }
+    } else {
+        Serial.println("MCP23017 GPIO expander disabled in configuration");
+    }
     
     // Initialize status LEDs with loaded configuration
     pinMode(config.pins.status_led_pin, OUTPUT);
@@ -267,5 +317,80 @@ void MainApplication::printStatusReport() {
     Serial.print("Storage disk reads: ");
     Serial.println(storage_manager.get_disk_reads());
 
+    #ifdef ARDUINO
+    // Print I2C device status
+    print_i2c_status();
+    #endif
+
     Serial.println("========================");
 }
+
+// =============================================================================
+// I2C DEVICE HELPER FUNCTIONS
+// =============================================================================
+
+#ifdef ARDUINO
+// Global access to I2C devices for other modules
+extern Adafruit_ADS1015 ads1015;
+extern Adafruit_MCP23X17 mcp;
+
+// Function to read from ADS1015 ADC
+int16_t read_ads1015_channel(uint8_t channel) {
+    if (channel > 3) return 0;  // Invalid channel
+    
+    switch (channel) {
+        case 0: return ads1015.readADC_SingleEnded(0);
+        case 1: return ads1015.readADC_SingleEnded(1);
+        case 2: return ads1015.readADC_SingleEnded(2);
+        case 3: return ads1015.readADC_SingleEnded(3);
+        default: return 0;
+    }
+}
+
+// Function to read from MCP23017 GPIO expander
+bool read_mcp23017_pin(uint8_t pin) {
+    if (pin > 15) return false;  // Invalid pin
+    return mcp.digitalRead(pin);
+}
+
+// Function to write to MCP23017 GPIO expander
+void write_mcp23017_pin(uint8_t pin, bool value) {
+    if (pin > 15) return;  // Invalid pin
+    mcp.digitalWrite(pin, value);
+}
+
+// Function to configure MCP23017 pin mode
+void configure_mcp23017_pin(uint8_t pin, uint8_t mode) {
+    if (pin > 15) return;  // Invalid pin
+    mcp.pinMode(pin, mode);
+}
+
+// Function to get I2C device status for status report
+void print_i2c_status() {
+    const ECUConfiguration& config = config_manager.getConfig();
+    
+    Serial.println("=== I2C Device Status ===");
+    Serial.print("I2C Bus Frequency: ");
+    Serial.print(config.i2c.bus_frequency);
+    Serial.println(" Hz");
+    
+    if (config.i2c.adc.enabled) {
+        Serial.print("ADS1015 ADC (0x");
+        Serial.print(config.i2c.adc.address, HEX);
+        Serial.println("): Enabled");
+        // Note: We could add actual device communication test here
+    } else {
+        Serial.println("ADS1015 ADC: Disabled");
+    }
+    
+    if (config.i2c.gpio_expander.enabled) {
+        Serial.print("MCP23017 GPIO (0x");
+        Serial.print(config.i2c.gpio_expander.address, HEX);
+        Serial.println("): Enabled");
+        // Note: We could add actual device communication test here
+    } else {
+        Serial.println("MCP23017 GPIO: Disabled");
+    }
+    Serial.println("========================");
+}
+#endif
