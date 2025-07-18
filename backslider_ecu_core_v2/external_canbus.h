@@ -25,6 +25,7 @@ struct external_canbus_stats_t {
     uint32_t messages_received;
     uint32_t obdii_requests;
     uint32_t custom_messages;
+    uint32_t parameter_messages;
     uint32_t cache_hits;
     uint32_t cache_misses;
     uint32_t subscription_count;
@@ -185,6 +186,8 @@ private:
     void route_incoming_message(const CAN_message_t& msg);
     bool is_obdii_message(const CAN_message_t& msg);
     bool is_custom_message(const CAN_message_t& msg);
+    bool is_parameter_message(const CAN_message_t& msg);
+    void route_parameter_message(const CAN_message_t& msg);
     
     // Error handling
     void handle_error(const char* error_msg);

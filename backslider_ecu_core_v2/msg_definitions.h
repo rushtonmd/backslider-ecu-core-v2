@@ -321,6 +321,43 @@ typedef struct {
 } storage_export_complete_msg_t;
 
 // =============================================================================
+// PARAMETER MESSAGE STRUCTURES (FOR DIRECT CAN ID ACCESS)
+// =============================================================================
+
+// Parameter operation flags
+#define PARAM_OP_STATUS_BROADCAST   0x00    // ECU→External: Current value broadcast
+#define PARAM_OP_READ_REQUEST       0x01    // External→ECU: Request current value
+#define PARAM_OP_WRITE_REQUEST      0x02    // External→ECU: Write new value
+#define PARAM_OP_READ_RESPONSE      0x03    // ECU→External: Response to read request
+#define PARAM_OP_WRITE_ACK          0x04    // ECU→External: Write acknowledgment
+#define PARAM_OP_ERROR              0x05    // ECU→External: Operation error
+
+// Parameter operation message (for direct CAN ID access)
+typedef struct {
+    uint8_t operation;          // Operation type (see PARAM_OP_* flags)
+    float value;                // Parameter value (4 bytes)
+    uint8_t reserved[3];        // Reserved for future use
+} __attribute__((packed)) parameter_msg_t;
+
+// Parameter error codes
+#define PARAM_ERROR_SUCCESS             0x00
+#define PARAM_ERROR_READ_ONLY           0x01    // Parameter is read-only
+#define PARAM_ERROR_OUT_OF_RANGE        0x02    // Value outside valid range
+#define PARAM_ERROR_INVALID_OPERATION   0x03    // Invalid operation for this parameter
+#define PARAM_ERROR_SYSTEM_BUSY         0x04    // System too busy to process
+#define PARAM_ERROR_PERMISSION_DENIED   0x05    // Insufficient permissions
+
+// Parameter error message
+typedef struct {
+    uint8_t operation;          // Original operation that failed
+    uint8_t error_code;         // Error code (see PARAM_ERROR_* codes)
+    float attempted_value;      // Value that was attempted (for write errors)
+    uint8_t reserved[2];        // Reserved for future use  
+} __attribute__((packed)) parameter_error_msg_t;
+
+
+
+// =============================================================================
 // CONSTANTS AND ENUMS
 // =============================================================================
 

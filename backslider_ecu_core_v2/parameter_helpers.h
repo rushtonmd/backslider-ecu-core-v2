@@ -1,0 +1,75 @@
+// parameter_helpers.h
+// Helper functions for parameter message handling using the new paradigm
+
+#ifndef PARAMETER_HELPERS_H
+#define PARAMETER_HELPERS_H
+
+#include "msg_definitions.h"
+#include "msg_bus.h"
+
+// External reference to global message bus
+extern MessageBus g_message_bus;
+
+// =============================================================================
+// PARAMETER MESSAGE HELPER FUNCTIONS
+// =============================================================================
+
+// Helper function to send parameter response
+inline void send_parameter_response(uint32_t param_id, uint8_t operation, float value) {
+    parameter_msg_t response = {
+        .operation = operation,
+        .value = value,
+        .reserved = {0}
+    };
+    g_message_bus.publish(param_id, &response, sizeof(response));
+}
+
+// Helper function to send parameter error
+inline void send_parameter_error(uint32_t param_id, uint8_t failed_operation, 
+                                uint8_t error_code, float attempted_value) {
+    parameter_error_msg_t error = {
+        .operation = failed_operation,
+        .error_code = error_code,
+        .attempted_value = attempted_value,
+        .reserved = {0}
+    };
+    g_message_bus.publish(param_id, &error, sizeof(error));
+}
+
+// Helper function to extract parameter message from CAN message
+inline parameter_msg_t* get_parameter_msg(const CANMessage* msg) {
+    return (parameter_msg_t*)msg->buf;
+}
+
+// Helper function to validate parameter operation
+inline bool is_valid_parameter_operation(uint8_t operation) {
+    return (operation >= PARAM_OP_STATUS_BROADCAST && operation <= PARAM_OP_ERROR);
+}
+
+// Helper function to validate parameter message length
+inline bool is_valid_parameter_message(const CANMessage* msg) {
+    return (msg != nullptr && msg->len == sizeof(parameter_msg_t));
+}
+
+// Helper function to create parameter message for publishing
+inline void create_parameter_message(CANMessage* msg, uint32_t param_id, 
+                                    uint8_t operation, float value) {
+    if (msg == nullptr) return;
+    
+    parameter_msg_t param = {
+        .operation = operation,
+        .value = value,
+        .reserved = {0}
+    };
+    
+    msg->id = param_id;
+    msg->len = sizeof(parameter_msg_t);
+    memcpy(msg->buf, &param, sizeof(parameter_msg_t));
+}
+
+// Helper function to broadcast parameter status (for periodic updates)
+inline void broadcast_parameter_status(uint32_t param_id, float value) {
+    send_parameter_response(param_id, PARAM_OP_STATUS_BROADCAST, value);
+}
+
+#endif // PARAMETER_HELPERS_H 

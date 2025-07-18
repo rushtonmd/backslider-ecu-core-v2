@@ -25,6 +25,7 @@
 #include "transmission_module.h"
 #include "input_manager.h"
 #include "msg_bus.h"
+#include "parameter_helpers.h"
 #include "thermistor_table_generator.h"
 
 // Forward declarations to avoid header conflicts
@@ -251,6 +252,7 @@ static void handle_gear_position_switches(const CANMessage* msg);
 static void handle_throttle_position(const CANMessage* msg);
 static void handle_vehicle_speed(const CANMessage* msg);
 static void handle_brake_pedal(const CANMessage* msg);
+static void handle_transmission_parameter_request(const CANMessage* msg);
 static void update_gear_position(void);
 static void process_shift_requests(void);
 static void publish_transmission_state(void);
@@ -260,6 +262,13 @@ static bool execute_downshift(void);
 static void set_shift_solenoid_pattern(uint8_t gear);
 static void set_line_pressure_for_gear(gear_position_t gear);
 static void set_line_pressure(float pressure_percent);
+
+// Solenoid state getters for parameter requests
+static float get_shift_solenoid_a_state(void);
+static float get_shift_solenoid_b_state(void);
+static float get_lockup_solenoid_state(void);
+static float get_pressure_solenoid_state(void);
+static float get_overrun_solenoid_state(void);
 
 // Overrun clutch control functions
 static overrun_clutch_state_t calculate_overrun_clutch_state(void);
@@ -564,6 +573,17 @@ static void subscribe_to_transmission_messages(void) {
     g_message_bus.subscribe(MSG_THROTTLE_POSITION, handle_throttle_position);
     g_message_bus.subscribe(MSG_VEHICLE_SPEED, handle_vehicle_speed);
     g_message_bus.subscribe(MSG_BRAKE_PEDAL, handle_brake_pedal);
+    
+    // Subscribe to parameter requests for transmission status
+    g_message_bus.subscribe(MSG_TRANS_CURRENT_GEAR, handle_transmission_parameter_request);
+    g_message_bus.subscribe(MSG_TRANS_SHIFT_REQUEST, handle_transmission_parameter_request);
+    g_message_bus.subscribe(MSG_TRANS_OVERRUN_STATE, handle_transmission_parameter_request);
+    g_message_bus.subscribe(MSG_TRANS_STATE_VALID, handle_transmission_parameter_request);
+    g_message_bus.subscribe(MSG_TRANS_SHIFT_SOL_A, handle_transmission_parameter_request);
+    g_message_bus.subscribe(MSG_TRANS_SHIFT_SOL_B, handle_transmission_parameter_request);
+    g_message_bus.subscribe(MSG_TRANS_LOCKUP_SOL, handle_transmission_parameter_request);
+    g_message_bus.subscribe(MSG_TRANS_PRESSURE_SOL, handle_transmission_parameter_request);
+    g_message_bus.subscribe(MSG_TRANS_OVERRUN_SOL, handle_transmission_parameter_request);
 }
 
 static void handle_trans_fluid_temp(const CANMessage* msg) {
@@ -628,6 +648,72 @@ static void handle_gear_position_switches(const CANMessage* msg) {
         case MSG_TRANS_DRIVE_SWITCH:    trans_state.drive_switch = switch_active; break;
         case MSG_TRANS_SECOND_SWITCH:   trans_state.second_switch = switch_active; break;
         case MSG_TRANS_FIRST_SWITCH:    trans_state.first_switch = switch_active; break;
+    }
+}
+
+// =============================================================================
+// PARAMETER REQUEST HANDLER
+// =============================================================================
+
+static void handle_transmission_parameter_request(const CANMessage* msg) {
+    // Validate parameter message
+    if (!is_valid_parameter_message(msg)) {
+        return;
+    }
+    
+    parameter_msg_t* param = get_parameter_msg(msg);
+    
+    // Only handle read requests for transmission parameters (read-only)
+    if (param->operation == PARAM_OP_READ_REQUEST) {
+        float current_value = 0.0f;
+        
+        // Get current value based on parameter ID
+        switch (msg->id) {
+            case MSG_TRANS_CURRENT_GEAR:
+                current_value = (float)trans_state.current_gear;
+                break;
+            case MSG_TRANS_SHIFT_REQUEST:
+                current_value = (float)trans_state.shift_request;
+                break;
+            case MSG_TRANS_OVERRUN_STATE:
+                current_value = (float)trans_state.overrun_state;
+                break;
+            case MSG_TRANS_STATE_VALID:
+                current_value = trans_state.valid_gear_position ? 1.0f : 0.0f;
+                break;
+            case MSG_TRANS_SHIFT_SOL_A:
+                current_value = (get_shift_solenoid_a_state() > 0.5f) ? 1.0f : 0.0f;
+                break;
+            case MSG_TRANS_SHIFT_SOL_B:
+                current_value = (get_shift_solenoid_b_state() > 0.5f) ? 1.0f : 0.0f;
+                break;
+            case MSG_TRANS_LOCKUP_SOL:
+                current_value = (get_lockup_solenoid_state() > 0.5f) ? 1.0f : 0.0f;
+                break;
+            case MSG_TRANS_PRESSURE_SOL:
+                current_value = get_pressure_solenoid_state();
+                break;
+            case MSG_TRANS_OVERRUN_SOL:
+                current_value = (get_overrun_solenoid_state() > 0.5f) ? 1.0f : 0.0f;
+                break;
+            default:
+                // Unknown parameter - send error
+                send_parameter_error(msg->id, PARAM_OP_READ_REQUEST, 
+                                   PARAM_ERROR_INVALID_OPERATION, 0.0f);
+                return;
+        }
+        
+        // Send response with current value
+        send_parameter_response(msg->id, PARAM_OP_READ_RESPONSE, current_value);
+        
+    } else if (param->operation == PARAM_OP_WRITE_REQUEST) {
+        // Transmission parameters are read-only
+        send_parameter_error(msg->id, PARAM_OP_WRITE_REQUEST, 
+                           PARAM_ERROR_READ_ONLY, param->value);
+    } else {
+        // Invalid operation
+        send_parameter_error(msg->id, param->operation, 
+                           PARAM_ERROR_INVALID_OPERATION, param->value);
     }
 }
 
@@ -938,6 +1024,47 @@ static void set_line_pressure(float pressure_percent) {
     Serial.print(pressure_percent * 100.0f);
     Serial.println("%");
     #endif
+}
+
+// =============================================================================
+// SOLENOID STATE GETTERS
+// =============================================================================
+
+static float get_shift_solenoid_a_state(void) {
+    // Return current shift solenoid A state based on gear
+    if (trans_state.current_gear == GEAR_DRIVE) {
+        return (current_auto_gear == 1 || current_auto_gear == 4) ? 1.0f : 0.0f;
+    }
+    return 0.0f;  // OFF for all other gears
+}
+
+static float get_shift_solenoid_b_state(void) {
+    // Return current shift solenoid B state based on gear
+    if (trans_state.current_gear == GEAR_DRIVE) {
+        return (current_auto_gear == 1 || current_auto_gear == 2) ? 1.0f : 0.0f;
+    }
+    return 0.0f;  // OFF for all other gears
+}
+
+static float get_lockup_solenoid_state(void) {
+    // Return current lockup solenoid state based on gear
+    if (trans_state.current_gear == GEAR_DRIVE) {
+        return (current_auto_gear == 4) ? 1.0f : 0.0f;  // Only ON in 4th gear
+    }
+    return 0.0f;  // OFF for all other gears
+}
+
+static float get_pressure_solenoid_state(void) {
+    // Return current pressure solenoid state based on gear
+    if (trans_state.current_gear == GEAR_PARK || trans_state.current_gear == GEAR_NEUTRAL) {
+        return 0.0f;  // No pressure needed
+    }
+    return 1.0f;  // Full pressure for all moving gears
+}
+
+static float get_overrun_solenoid_state(void) {
+    // Return current overrun solenoid state
+    return (trans_state.overrun_state == OVERRUN_ENGAGED) ? 1.0f : 0.0f;
 }
 
 // =============================================================================

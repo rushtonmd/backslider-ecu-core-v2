@@ -4,6 +4,7 @@
 #include "external_canbus.h"
 #include "obdii_handler.h"
 #include "custom_message_handler.h"
+#include "parameter_helpers.h"
 #include <map>
 
 #ifdef ARDUINO
@@ -348,6 +349,13 @@ void ExternalCanBus::route_incoming_message(const CAN_message_t& msg) {
         return;
     }
     
+    // Check if it's a parameter message - route to internal message bus
+    if (is_parameter_message(msg)) {
+        route_parameter_message(msg);
+        stats.parameter_messages++;
+        return;
+    }
+    
     // Check if it's a custom message
     if (custom_messages_enabled && is_custom_message(msg)) {
         if (custom_handler != nullptr) {
@@ -369,6 +377,28 @@ bool ExternalCanBus::is_custom_message(const CAN_message_t& msg) {
     // Custom messages use all other CAN IDs
     return (msg.id != OBDII_REQUEST_ID && 
             (msg.id < OBDII_RESPONSE_ID_BASE || msg.id > (OBDII_RESPONSE_ID_BASE + 7)));
+}
+
+bool ExternalCanBus::is_parameter_message(const CAN_message_t& msg) {
+    // Parameter messages use the parameter_msg_t structure
+    return (msg.len == sizeof(parameter_msg_t));
+}
+
+void ExternalCanBus::route_parameter_message(const CAN_message_t& msg) {
+    // Forward parameter message to internal message bus
+    // This allows modules to handle parameter requests directly
+    extern MessageBus g_message_bus;
+    
+    // Create a CANMessage for the internal message bus
+    CANMessage internal_msg;
+    internal_msg.id = msg.id;
+    internal_msg.len = msg.len;
+    memcpy(internal_msg.buf, msg.buf, msg.len);
+    
+    // Publish to internal message bus
+    g_message_bus.publish(msg.id, msg.buf, msg.len);
+    
+    debug_print("ExternalCanBus: Parameter message routed to internal message bus");
 }
 
 bool ExternalCanBus::send_can_message(const CAN_message_t& msg) {
