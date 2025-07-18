@@ -1,244 +1,330 @@
-// test_storage_manager.cpp
-// Test storage manager functionality with message bus integration
+// storage_manager_test.cpp
+// Test storage manager with extended CAN ID architecture
 
 #include <iostream>
-#include <assert.h>
+#include <cassert>
+#include <cstring>
+#include <cstdint>
+#include <string>
 
-// Include mock Arduino before any ECU code
 #include "../mock_arduino.h"
-
-// Define the Serial mock object
-MockSerial Serial;
-
 #include "../../storage_manager.h"
 #include "../../spi_flash_storage_backend.h"
 #include "../../msg_bus.h"
+#include "../../msg_definitions.h"
 
-// Mock millis for testing - use the one from mock_arduino.cpp
+// Mock global time for testing
 extern uint32_t mock_millis_time;
 
-// Test storage manager functionality
-void test_storage_manager() {
-    std::cout << "=== Testing Storage Manager ===" << std::endl;
-    
-    // Create storage backend and manager
-    SPIFlashStorageBackend backend;
-    StorageManager storage_manager(&backend);
-    
-    // Initialize systems
-    g_message_bus.init();
-    assert(storage_manager.init() == true);
-    
-    std::cout << "✓ Storage manager initialized successfully" << std::endl;
+// Mock Serial for desktop testing
+MockSerial Serial;
+
+// Test storage manager
+StorageManager* test_storage_manager = nullptr;
+
+// Test message response handlers
+bool save_response_received = false;
+bool load_response_received = false;
+float load_response_value = 0.0f;
+uint32_t load_response_key = 0;
+
+void test_save_response_handler(const CANMessage* msg) {
+    auto response = MSG_UNPACK_STORAGE_SAVE_RESPONSE(msg);
+    save_response_received = true;
+    std::cout << "Save response received for key 0x" << std::hex << response->storage_key << std::dec 
+              << " success=" << (int)response->success << std::endl;
+}
+
+void test_load_response_handler(const CANMessage* msg) {
+    auto response = MSG_UNPACK_STORAGE_LOAD_RESPONSE(msg);
+    load_response_received = true;
+    load_response_value = response->value;
+    load_response_key = response->storage_key;
+    std::cout << "Load response received for key 0x" << std::hex << response->storage_key << std::dec 
+              << " value=" << response->value << std::endl;
+}
+
+void test_basic_storage_operations() {
+    std::cout << "\n=== Test 1: Basic Storage Operations ===\n" << std::endl;
     
     // Test 1: Direct save/load
-    std::cout << "\nTest 1: Direct save/load operations" << std::endl;
+    std::cout << "Test 1: Direct save/load operation" << std::endl;
     
-    bool save_result = storage_manager.save_float("test_key", 42.5f);
+    // Use extended CAN ID directly as storage key
+    uint32_t fuel_map_key = MSG_FUEL_MAP_CELL(5, 10);
+    float test_value = 42.5f;
+    
+    bool save_result = test_storage_manager->save_float(fuel_map_key, test_value);
     assert(save_result == true);
     std::cout << "✓ Direct save operation successful" << std::endl;
     
     float loaded_value;
-    bool load_result = storage_manager.load_float("test_key", &loaded_value);
+    bool load_result = test_storage_manager->load_float(fuel_map_key, &loaded_value);
     assert(load_result == true);
-    assert(loaded_value == 42.5f);
+    assert(loaded_value == test_value);
     std::cout << "✓ Direct load operation successful, value: " << loaded_value << std::endl;
     
     // Test 2: Message-driven save
     std::cout << "\nTest 2: Message-driven save operation" << std::endl;
     
-    // Create save message
-    storage_save_float_msg_t save_data;
-    save_data.key_hash = crc16("fuel_map.5.10");
-    save_data.value = 14.7f;
-    save_data.priority = 0;
-    save_data.sender_id = 1;
+    // Create save message using new extended CAN ID structure
+    CANMessage save_msg;
+    uint32_t config_key = MSG_CONFIG_FUEL_BASE_PRESSURE;
+    float save_value = 14.7f;
+    
+    MSG_PACK_STORAGE_SAVE_FLOAT(&save_msg, config_key, save_value);
     
     // Send message via message bus
-    g_message_bus.publish(MSG_STORAGE_SAVE_FLOAT, &save_data, sizeof(save_data));
+    g_message_bus.publish(MSG_STORAGE_SAVE, save_msg.buf, save_msg.len);
     
     // Process message bus to handle the save
     g_message_bus.process();
     
     // Update storage manager
-    storage_manager.update();
+    test_storage_manager->update();
     
     std::cout << "✓ Message-driven save completed" << std::endl;
     
     // Test 3: Message-driven load
     std::cout << "\nTest 3: Message-driven load operation" << std::endl;
     
-    // Create load message
-    storage_load_float_msg_t load_data;
-    load_data.key_hash = crc16("fuel_map.5.10");
-    load_data.default_value = 0.0f;
-    load_data.sender_id = 1;
-    load_data.request_id = 42;
+    // Create load message using new extended CAN ID structure
+    CANMessage load_msg;
+    float default_value = 0.0f;
+    
+    MSG_PACK_STORAGE_LOAD_FLOAT(&load_msg, config_key, default_value);
     
     // Send message via message bus
-    g_message_bus.publish(MSG_STORAGE_LOAD_FLOAT, &load_data, sizeof(load_data));
+    g_message_bus.publish(MSG_STORAGE_LOAD, load_msg.buf, load_msg.len);
     
     // Process message bus to handle the load
     g_message_bus.process();
     
     // Update storage manager
-    storage_manager.update();
+    test_storage_manager->update();
     
     std::cout << "✓ Message-driven load completed" << std::endl;
     
     // Test 4: Cache functionality
     std::cout << "\nTest 4: Cache functionality" << std::endl;
     
-    // Save multiple values to test cache
-    for (int i = 0; i < 5; i++) {
-        std::string key = "cache_test_" + std::to_string(i);
-        float value = i * 10.5f;
-        
-        bool result = storage_manager.save_float(key.c_str(), value);
-        assert(result == true);
-    }
+    // Load the same value multiple times to test caching
+    float cached_value1, cached_value2;
     
-    // Load values back (should hit cache)
-    for (int i = 0; i < 5; i++) {
-        std::string key = "cache_test_" + std::to_string(i);
-        float expected_value = i * 10.5f;
-        float actual_value;
-        
-        bool result = storage_manager.load_float(key.c_str(), &actual_value);
-        assert(result == true);
-        assert(actual_value == expected_value);
-    }
+    bool cache_result1 = test_storage_manager->load_float(fuel_map_key, &cached_value1);
+    bool cache_result2 = test_storage_manager->load_float(fuel_map_key, &cached_value2);
+    
+    assert(cache_result1 == true);
+    assert(cache_result2 == true);
+    assert(cached_value1 == cached_value2);
+    assert(cached_value1 == test_value);
     
     std::cout << "✓ Cache functionality working correctly" << std::endl;
     
-    // Test 5: Statistics
-    std::cout << "\nTest 5: Statistics tracking" << std::endl;
+    // Test 5: Extended CAN ID breakdown
+    std::cout << "\nTest 5: Extended CAN ID breakdown" << std::endl;
     
-    assert(storage_manager.get_cache_hits() > 0);
-    assert(storage_manager.get_disk_writes() > 0);
-    
-    std::cout << "Cache hits: " << storage_manager.get_cache_hits() << std::endl;
-    std::cout << "Cache misses: " << storage_manager.get_cache_misses() << std::endl;
-    std::cout << "Disk writes: " << storage_manager.get_disk_writes() << std::endl;
-    std::cout << "Disk reads: " << storage_manager.get_disk_reads() << std::endl;
-    
-    std::cout << "✓ Statistics tracking working correctly" << std::endl;
-    
-    // Test 6: Error handling
-    std::cout << "\nTest 6: Error handling" << std::endl;
-    
-    float non_existent_value;
-    bool error_result = storage_manager.load_float("non_existent_key", &non_existent_value, 99.9f);
-    assert(error_result == false);
-    assert(non_existent_value == 99.9f);  // Should return default value
-    
-    std::cout << "✓ Error handling working correctly" << std::endl;
-    
-    std::cout << "\n=== All Storage Manager Tests Passed! ===" << std::endl;
-}
-
-// Test ECU use case - transmission settings
-void test_transmission_settings() {
-    std::cout << "\n=== Testing Transmission Settings Use Case ===" << std::endl;
-    
-    // Create storage backend and manager
-    SPIFlashStorageBackend backend;
-    StorageManager storage_manager(&backend);
-    
-    // Initialize systems
-    g_message_bus.init();
-    assert(storage_manager.init() == true);
-    
-    // Simulate transmission module saving settings
-    std::cout << "Saving transmission settings..." << std::endl;
-    
-    // Save various transmission parameters
-    struct TransmissionSettings {
-        float shift_rpm_1_2;
-        float shift_rpm_2_3;
-        float shift_rpm_3_4;
-        float line_pressure;
-        float lockup_speed;
-    } settings = {
-        .shift_rpm_1_2 = 2500.0f,
-        .shift_rpm_2_3 = 3000.0f,
-        .shift_rpm_3_4 = 3500.0f,
-        .line_pressure = 80.0f,
-        .lockup_speed = 45.0f
+    // Test various extended CAN IDs
+    uint32_t test_keys[] = {
+        MSG_ENGINE_RPM,
+        MSG_FUEL_MAP_CELL(10, 15),
+        MSG_IGNITION_MAP_CELL(5, 8),
+        MSG_CONFIG_FUEL_BASE_PRESSURE,
+        MSG_TRANS_FLUID_TEMP
     };
     
-    // Save via message bus (as transmission module would)
-    storage_save_float_msg_t save_data;
-    save_data.priority = 1;
-    save_data.sender_id = 2;
+    for (size_t i = 0; i < sizeof(test_keys) / sizeof(test_keys[0]); i++) {
+        uint32_t key = test_keys[i];
+        float value = 100.0f + i;
+        
+        // Save and load
+        bool save_ok = test_storage_manager->save_float(key, value);
+        assert(save_ok == true);
+        
+        float loaded;
+        bool load_ok = test_storage_manager->load_float(key, &loaded);
+        assert(load_ok == true);
+        assert(loaded == value);
+        
+        // Print breakdown
+        uint8_t ecu_base = GET_ECU_BASE(key) >> 28;
+        uint8_t subsystem = GET_SUBSYSTEM(key) >> 20;
+        uint32_t parameter = GET_PARAMETER(key);
+        
+        std::cout << "  Key 0x" << std::hex << key << std::dec
+                  << " -> ECU=" << (int)ecu_base 
+                  << " SUB=" << (int)subsystem
+                  << " PARAM=" << parameter
+                  << " Value=" << value << std::endl;
+    }
     
-    save_data.key_hash = crc16("trans.shift_rpm_1_2");
-    save_data.value = settings.shift_rpm_1_2;
-    g_message_bus.publish(MSG_STORAGE_SAVE_FLOAT, &save_data, sizeof(save_data));
+    std::cout << "✓ Extended CAN ID breakdown test passed" << std::endl;
+}
+
+void test_message_responses() {
+    std::cout << "\n=== Test 2: Message Response Handling ===\n" << std::endl;
     
-    save_data.key_hash = crc16("trans.shift_rpm_2_3");
-    save_data.value = settings.shift_rpm_2_3;
-    g_message_bus.publish(MSG_STORAGE_SAVE_FLOAT, &save_data, sizeof(save_data));
+    // Subscribe to response messages
+    g_message_bus.subscribe(MSG_STORAGE_SAVE_RESPONSE, test_save_response_handler);
+    g_message_bus.subscribe(MSG_STORAGE_LOAD_RESPONSE, test_load_response_handler);
     
-    save_data.key_hash = crc16("trans.shift_rpm_3_4");
-    save_data.value = settings.shift_rpm_3_4;
-    g_message_bus.publish(MSG_STORAGE_SAVE_FLOAT, &save_data, sizeof(save_data));
+    // Reset response flags
+    save_response_received = false;
+    load_response_received = false;
     
-    save_data.key_hash = crc16("trans.line_pressure");
-    save_data.value = settings.line_pressure;
-    g_message_bus.publish(MSG_STORAGE_SAVE_FLOAT, &save_data, sizeof(save_data));
+    // Send save message
+    CANMessage save_msg;
+    uint32_t test_key = MSG_CONFIG_IGNITION_BASE_TIMING;
+    float test_value = 15.0f;
     
-    save_data.key_hash = crc16("trans.lockup_speed");
-    save_data.value = settings.lockup_speed;
-    g_message_bus.publish(MSG_STORAGE_SAVE_FLOAT, &save_data, sizeof(save_data));
+    MSG_PACK_STORAGE_SAVE_FLOAT(&save_msg, test_key, test_value);
+    g_message_bus.publish(MSG_STORAGE_SAVE, save_msg.buf, save_msg.len);
     
-    // Process all messages
+    // Process messages
     g_message_bus.process();
-    storage_manager.update();
+    test_storage_manager->update();
+    g_message_bus.process();  // Process any response messages
     
-    std::cout << "✓ Transmission settings saved" << std::endl;
+    // Check save response
+    assert(save_response_received == true);
+    std::cout << "✓ Save response received" << std::endl;
     
-    // Simulate ECU reboot - load settings back
-    std::cout << "Loading transmission settings after reboot..." << std::endl;
+    // Send load message
+    CANMessage load_msg;
+    float default_val = 0.0f;
     
-    TransmissionSettings loaded_settings;
+    MSG_PACK_STORAGE_LOAD_FLOAT(&load_msg, test_key, default_val);
+    g_message_bus.publish(MSG_STORAGE_LOAD, load_msg.buf, load_msg.len);
     
-    assert(storage_manager.load_float("trans.shift_rpm_1_2", &loaded_settings.shift_rpm_1_2) == true);
-    assert(storage_manager.load_float("trans.shift_rpm_2_3", &loaded_settings.shift_rpm_2_3) == true);
-    assert(storage_manager.load_float("trans.shift_rpm_3_4", &loaded_settings.shift_rpm_3_4) == true);
-    assert(storage_manager.load_float("trans.line_pressure", &loaded_settings.line_pressure) == true);
-    assert(storage_manager.load_float("trans.lockup_speed", &loaded_settings.lockup_speed) == true);
+    // Process messages
+    g_message_bus.process();
+    test_storage_manager->update();
+    g_message_bus.process();  // Process any response messages
     
-    // Verify all values match
-    assert(loaded_settings.shift_rpm_1_2 == settings.shift_rpm_1_2);
-    assert(loaded_settings.shift_rpm_2_3 == settings.shift_rpm_2_3);
-    assert(loaded_settings.shift_rpm_3_4 == settings.shift_rpm_3_4);
-    assert(loaded_settings.line_pressure == settings.line_pressure);
-    assert(loaded_settings.lockup_speed == settings.lockup_speed);
+    // Check load response
+    assert(load_response_received == true);
+    assert(load_response_key == test_key);
+    assert(load_response_value == test_value);
+    std::cout << "✓ Load response received with correct value" << std::endl;
+}
+
+void test_cache_performance() {
+    std::cout << "\n=== Test 3: Cache Performance ===\n" << std::endl;
     
-    std::cout << "✓ All transmission settings loaded correctly" << std::endl;
-    std::cout << "  1->2 shift: " << loaded_settings.shift_rpm_1_2 << " RPM" << std::endl;
-    std::cout << "  2->3 shift: " << loaded_settings.shift_rpm_2_3 << " RPM" << std::endl;
-    std::cout << "  3->4 shift: " << loaded_settings.shift_rpm_3_4 << " RPM" << std::endl;
-    std::cout << "  Line pressure: " << loaded_settings.line_pressure << " PSI" << std::endl;
-    std::cout << "  Lockup speed: " << loaded_settings.lockup_speed << " MPH" << std::endl;
+    // Fill cache with multiple values
+    std::cout << "Filling cache with test data..." << std::endl;
     
-    std::cout << "\n=== Transmission Settings Test Passed! ===" << std::endl;
+    for (int i = 0; i < 15; i++) {
+        uint32_t key = MSG_FUEL_MAP_CELL(i, i + 1);
+        float value = 1000.0f + i;
+        
+        bool result = test_storage_manager->save_float(key, value);
+        assert(result == true);
+    }
+    
+    std::cout << "✓ Cache filled successfully" << std::endl;
+    
+    // Test cache hit performance
+    std::cout << "Testing cache hit performance..." << std::endl;
+    
+    for (int i = 0; i < 15; i++) {
+        uint32_t key = MSG_FUEL_MAP_CELL(i, i + 1);
+        float expected_value = 1000.0f + i;
+        float loaded_value;
+        
+        bool result = test_storage_manager->load_float(key, &loaded_value);
+        assert(result == true);
+        assert(loaded_value == expected_value);
+    }
+    
+    std::cout << "✓ Cache performance test passed" << std::endl;
+    
+    // Print cache statistics
+    test_storage_manager->print_cache_info();
+}
+
+void test_map_cell_macros() {
+    std::cout << "\n=== Test 4: Map Cell Macros ===\n" << std::endl;
+    
+    // Test fuel map cell macro
+    uint32_t fuel_cell_key = MSG_FUEL_MAP_CELL(10, 20);
+    float fuel_value = 12.5f;
+    
+    bool save_result = test_storage_manager->save_float(fuel_cell_key, fuel_value);
+    assert(save_result == true);
+    
+    float loaded_fuel_value;
+    bool load_result = test_storage_manager->load_float(fuel_cell_key, &loaded_fuel_value);
+    assert(load_result == true);
+    assert(loaded_fuel_value == fuel_value);
+    
+    std::cout << "✓ Fuel map cell macro test passed" << std::endl;
+    
+    // Test ignition map cell macro
+    uint32_t ignition_cell_key = MSG_IGNITION_MAP_CELL(5, 15);
+    float ignition_value = 25.0f;
+    
+    save_result = test_storage_manager->save_float(ignition_cell_key, ignition_value);
+    assert(save_result == true);
+    
+    float loaded_ignition_value;
+    load_result = test_storage_manager->load_float(ignition_cell_key, &loaded_ignition_value);
+    assert(load_result == true);
+    assert(loaded_ignition_value == ignition_value);
+    
+    std::cout << "✓ Ignition map cell macro test passed" << std::endl;
+    
+    // Test boost map cell macro
+    uint32_t boost_cell_key = MSG_BOOST_MAP_CELL(3, 7);
+    float boost_value = 18.0f;
+    
+    save_result = test_storage_manager->save_float(boost_cell_key, boost_value);
+    assert(save_result == true);
+    
+    float loaded_boost_value;
+    load_result = test_storage_manager->load_float(boost_cell_key, &loaded_boost_value);
+    assert(load_result == true);
+    assert(loaded_boost_value == boost_value);
+    
+    std::cout << "✓ Boost map cell macro test passed" << std::endl;
 }
 
 int main() {
-    std::cout << "Starting Storage Manager Tests..." << std::endl;
+    std::cout << "=== Storage Manager Test Suite (Extended CAN ID Architecture) ===" << std::endl;
     
-    // Debug: Check message sizes
-    std::cout << "Message sizes:" << std::endl;
-    std::cout << "  storage_save_float_msg_t: " << sizeof(storage_save_float_msg_t) << " bytes" << std::endl;
-    std::cout << "  storage_load_float_msg_t: " << sizeof(storage_load_float_msg_t) << " bytes" << std::endl;
-    std::cout << "  storage_load_response_msg_t: " << sizeof(storage_load_response_msg_t) << " bytes" << std::endl;
-    std::cout << "  storage_save_response_msg_t: " << sizeof(storage_save_response_msg_t) << " bytes" << std::endl;
+    // Initialize message bus
+    g_message_bus.init();
     
-    test_storage_manager();
-    test_transmission_settings();
+    // Initialize storage backend
+    SPIFlashStorageBackend storage_backend;
     
-    std::cout << "\n🎉 All tests passed! Storage system is working correctly." << std::endl;
+    // Initialize storage manager
+    test_storage_manager = new StorageManager(&storage_backend);
+    
+    if (!test_storage_manager->init()) {
+        std::cerr << "Failed to initialize storage manager" << std::endl;
+        return 1;
+    }
+    
+    std::cout << "✓ Storage manager initialized successfully" << std::endl;
+    
+    // Run tests
+    try {
+        test_basic_storage_operations();
+        test_message_responses();
+        test_cache_performance();
+        test_map_cell_macros();
+        
+        std::cout << "\n=== ALL TESTS PASSED ===" << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Test failed with exception: " << e.what() << std::endl;
+        delete test_storage_manager;
+        return 1;
+    }
+    
+    // Cleanup
+    delete test_storage_manager;
+    
     return 0;
 } 

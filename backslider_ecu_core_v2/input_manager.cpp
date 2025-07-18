@@ -209,46 +209,19 @@ uint8_t input_manager_register_sensors(const sensor_definition_t* new_sensors, u
 void input_manager_update(void) {
     uint32_t now_us = micros();
     
-    // Remove these debug lines:
-    // #ifndef ARDUINO
-    // std::cout << "DEBUG: input_manager_update() starting, current time: " << now_us << "us" << std::endl;
-    // std::cout << "DEBUG: Processing " << (int)sensor_count << " sensors" << std::endl;
-    // #endif
-    
     // Update each sensor on its own schedule
     for (uint8_t i = 0; i < sensor_count; i++) {
         uint32_t time_since_last = now_us - sensor_runtime[i].last_update_us;
         
-        // Remove these debug lines too:
-        // #ifndef ARDUINO
-        // std::cout << "DEBUG: Sensor " << (int)i << " - time since last: " << time_since_last 
-        //           << "us, interval: " << sensors[i].update_interval_us << "us" << std::endl;
-        // #endif
-        
         if (time_since_last >= sensors[i].update_interval_us) {
-            // Remove debug line:
-            // #ifndef ARDUINO
-            // std::cout << "DEBUG: Updating sensor " << (int)i << " (pin " << sensors[i].pin << ")" << std::endl;
-            // #endif
-            
             update_single_sensor(i);
             sensor_runtime[i].last_update_us = now_us;
             total_updates++;
-            
-            // Remove debug line:
-            // #ifndef ARDUINO
-            // std::cout << "DEBUG: Sensor " << (int)i << " updated, total_updates: " << total_updates << std::endl;
-            // #endif
         }
     }
     
     // Update interrupt-based frequency calculations
     update_interrupt_frequency_calculations();
-    
-    // Remove debug line:
-    // #ifndef ARDUINO
-    // std::cout << "DEBUG: input_manager_update() completed" << std::endl;
-    // #endif
 }
 
 // =============================================================================
@@ -320,6 +293,7 @@ static void update_single_sensor(uint8_t sensor_index) {
     // Read raw sensor data
     if (sensor->type == SENSOR_DIGITAL_PULLUP) {
         uint8_t digital_value = digitalRead(sensor->pin);
+        
         // Store raw reading - calibration function will handle inversion
         runtime->raw_counts = digital_value;
         runtime->raw_voltage = digital_value ? ADC_VOLTAGE_REF : 0.0f;

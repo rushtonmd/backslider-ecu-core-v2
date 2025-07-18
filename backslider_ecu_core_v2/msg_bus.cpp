@@ -1,5 +1,5 @@
 // msg_bus.cpp
-// Unified message bus implementation using FlexCAN format
+// Unified message bus implementation using FlexCAN format - Extended CAN ID Support
 
 #include "msg_bus.h"
 
@@ -21,7 +21,7 @@ MessageBus::MessageBus() :
 }
 
 void MessageBus::init() {
-    debug_print("MessageBus: Initializing...");
+    debug_print("MessageBus: Initializing with extended CAN ID support...");
     
     // Reset queue
     queue_head = 0;
@@ -43,8 +43,12 @@ bool MessageBus::subscribe(uint32_t msg_id, MessageHandler handler) {
     subscribers[subscriber_count].handler = handler;
     subscriber_count++;
     
-    char debug_msg[64];
-    snprintf(debug_msg, sizeof(debug_msg), "MessageBus: Subscribed to ID 0x%03X", msg_id);
+    char debug_msg[80];
+    if (is_extended_can_id(msg_id)) {
+        snprintf(debug_msg, sizeof(debug_msg), "MessageBus: Subscribed to Extended ID 0x%08X", msg_id);
+    } else {
+        snprintf(debug_msg, sizeof(debug_msg), "MessageBus: Subscribed to Standard ID 0x%03X", msg_id);
+    }
     debug_print(debug_msg);
     
     return true;
@@ -58,14 +62,13 @@ bool MessageBus::publish(uint32_t msg_id, const void* data, uint8_t length) {
     
     // Create CAN message
     CANMessage msg;
-    msg.id = msg_id;
-    msg.len = length;
-    memcpy(msg.buf, data, length);
-    #ifdef ARDUINO
-    msg.timestamp = micros();
-    #else
-    msg.timestamp = 0;  // Mock timestamp for desktop
-    #endif
+    
+    // Set up message based on ID type
+    if (is_extended_can_id(msg_id)) {
+        create_extended_can_message(&msg, msg_id, data, length);
+    } else {
+        create_standard_can_message(&msg, msg_id, data, length);
+    }
     
     // Add to internal queue
     if (!enqueue_internal_message(msg)) {
@@ -165,8 +168,6 @@ void MessageBus::resetSubscribers() {
     }
 }
 
-
-
 void MessageBus::debug_print(const char* message) {
     #ifdef ARDUINO
     Serial.println(message);
@@ -178,21 +179,72 @@ void MessageBus::debug_print(const char* message) {
 void MessageBus::debug_print_message(const CANMessage& msg, const char* prefix) {
     #ifdef ARDUINO
     Serial.print(prefix);
-    Serial.print(": ID=0x");
-    Serial.print(msg.id, HEX);
+    Serial.print(": ");
+    
+    // Print ID based on type
+    #ifdef ARDUINO
+    if (msg.flags.extended) {
+        Serial.print("Extended ID=0x");
+        Serial.print(msg.id, HEX);
+    } else {
+        Serial.print("Standard ID=0x");
+        Serial.print(msg.id, HEX);
+    }
+    #else
+    if (is_extended_can_id(msg.id)) {
+        Serial.print("Extended ID=0x");
+        Serial.print(msg.id, HEX);
+    } else {
+        Serial.print("Standard ID=0x");
+        Serial.print(msg.id, HEX);
+    }
+    #endif
+    
     Serial.print(" LEN=");
     Serial.print(msg.len);
     Serial.print(" DATA=");
     for (uint8_t i = 0; i < msg.len; i++) {
+        if (msg.buf[i] < 0x10) Serial.print("0");
         Serial.print(msg.buf[i], HEX);
         Serial.print(" ");
     }
+    
+    // Print extended ID breakdown for debugging
+    #ifdef ARDUINO
+    if (msg.flags.extended) {
+    #else
+    if (is_extended_can_id(msg.id)) {
+    #endif
+        Serial.print(" [ECU=0x");
+        Serial.print(GET_ECU_BASE(msg.id) >> 28, HEX);
+        Serial.print(" SUB=0x");
+        Serial.print(GET_SUBSYSTEM(msg.id) >> 20, HEX);
+        Serial.print(" PARAM=0x");
+        Serial.print(GET_PARAMETER(msg.id), HEX);
+        Serial.print("]");
+    }
+    
     Serial.println();
     #else
-    printf("%s: ID=0x%03X LEN=%d DATA=", prefix, msg.id, msg.len);
+    // Desktop/test environment
+    if (is_extended_can_id(msg.id)) {
+        printf("%s: Extended ID=0x%08X LEN=%d DATA=", prefix, msg.id, msg.len);
+    } else {
+        printf("%s: Standard ID=0x%03X LEN=%d DATA=", prefix, msg.id, msg.len);
+    }
+    
     for (uint8_t i = 0; i < msg.len; i++) {
         printf("%02X ", msg.buf[i]);
     }
+    
+    // Print extended ID breakdown for debugging
+    if (is_extended_can_id(msg.id)) {
+        printf(" [ECU=0x%X SUB=0x%02X PARAM=0x%05X]", 
+               GET_ECU_BASE(msg.id) >> 28,
+               GET_SUBSYSTEM(msg.id) >> 20,
+               GET_PARAMETER(msg.id));
+    }
+    
     printf("\n");
     #endif
 }

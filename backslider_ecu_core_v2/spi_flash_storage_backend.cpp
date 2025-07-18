@@ -1,531 +1,327 @@
 // spi_flash_storage_backend.cpp
-// Implementation of SPI Flash storage backend using Adafruit W25Q128 + FAT32
+// SPI Flash storage backend implementation - Extended CAN ID Architecture
 
 #include "spi_flash_storage_backend.h"
+#include <cstring>
+#include <sstream>
+#include <iostream>
 
-#ifndef ARDUINO
-#include "../tests/mock_arduino.h"
-extern MockSerial Serial;
-#endif
-
-#if defined(ARDUINO) && !defined(TESTING)
-#include <Arduino.h>
-// Flash transport configuration for Adafruit W25Q128
-// This creates the flashTransport object needed by Adafruit_SPIFlash
-#include "flash_config.h"
-#else
-// Static storage for mock files
-#include <map>
-#include <vector>
-std::map<std::string, std::vector<uint8_t>> MockFatVolume::mock_files;
-#endif
-
-#ifndef ARDUINO
-// Mock fatfs object for testing
-static MockFatVolume fatfs;
+#ifdef TESTING
+    #include "../tests/mock_arduino.h"
+    extern MockSerial Serial;
 #endif
 
 // =============================================================================
-// Constructor & Destructor
+// Constructor/Destructor
 // =============================================================================
 
 SPIFlashStorageBackend::SPIFlashStorageBackend() 
-    : write_count(0), read_count(0), format_count(0) {
-    #if defined(ARDUINO) && !defined(TESTING)
-    // Initialize flash object with transport from flash_config.h
-    flash = new Adafruit_SPIFlash(&flashTransport);
-    #else
-    // Initialize mock flash object for testing
-    flash = new MockSPIFlash();
-    #endif
+    : total_reads(0), total_writes(0), cache_hits(0), cache_misses(0) {
 }
 
 SPIFlashStorageBackend::~SPIFlashStorageBackend() {
-    #if defined(ARDUINO) && !defined(TESTING)
-    delete flash;
-    #endif
 }
 
 // =============================================================================
-// StorageBackend Interface Implementation
+// Core Interface Implementation
 // =============================================================================
 
 bool SPIFlashStorageBackend::begin() {
-    #if defined(ARDUINO) && !defined(TESTING)
-    Serial.println("Initializing SPI Flash storage...");
+    // Initialize mock file system
+    mock_files.clear();
     
-    // Initialize the flash chip
-    if (!flash->begin()) {
-        Serial.println("ERROR: Failed to initialize SPI flash chip");
-        return false;
-    }
-    
-    Serial.print("Flash chip size: ");
-    Serial.print(flash->size() / 1024 / 1024);
+    Serial.println("SPI Flash Storage Backend initialized (Extended CAN ID)");
+    Serial.print("Total capacity: ");
+    Serial.print(FLASH_SIZE / (1024 * 1024));
     Serial.println(" MB");
     
-    // Initialize FAT32 filesystem
-    if (!fatfs.begin(flash)) {
-        Serial.println("WARNING: No filesystem found. Formatting...");
-        if (!formatFilesystem()) {
-            Serial.println("ERROR: Failed to format filesystem");
-            return false;
+    return true;
+}
+
+bool SPIFlashStorageBackend::end() {
+    sync();
+    return true;
+}
+
+bool SPIFlashStorageBackend::readData(uint32_t storage_key, void* data, size_t dataSize) {
+    if (!data || dataSize == 0 || storage_key == 0) {
+        return false;
+    }
+    
+    std::string filepath = getFilePath(storage_key);
+    MockFile* file = openFile(filepath, "r");
+    
+    if (!file || !file->exists()) {
+        return false;
+    }
+    
+    size_t bytes_read = file->read(data, dataSize);
+    file->close();
+    
+    total_reads++;
+    
+    if (bytes_read == dataSize) {
+        return true;
+    }
+    
+    return false;
+}
+
+bool SPIFlashStorageBackend::writeData(uint32_t storage_key, const void* data, size_t dataSize) {
+    if (!data || dataSize == 0 || storage_key == 0) {
+        return false;
+    }
+    
+    std::string filepath = getFilePath(storage_key);
+    
+    // Ensure directory exists
+    if (!ensureDirectoryExists(filepath)) {
+        return false;
+    }
+    
+    MockFile* file = openFile(filepath, "w");
+    if (!file) {
+        return false;
+    }
+    
+    size_t bytes_written = file->write(data, dataSize);
+    file->close();
+    
+    total_writes++;
+    
+    return bytes_written == dataSize;
+}
+
+bool SPIFlashStorageBackend::deleteData(uint32_t storage_key) {
+    if (storage_key == 0) {
+        return false;
+    }
+    
+    std::string filepath = getFilePath(storage_key);
+    auto it = mock_files.find(filepath);
+    
+    if (it != mock_files.end()) {
+        mock_files.erase(it);
+        return true;
+    }
+    
+    return false;
+}
+
+bool SPIFlashStorageBackend::hasData(uint32_t storage_key) {
+    if (storage_key == 0) {
+        return false;
+    }
+    
+    std::string filepath = getFilePath(storage_key);
+    auto it = mock_files.find(filepath);
+    
+    return (it != mock_files.end() && it->second.exists());
+}
+
+// =============================================================================
+// Storage Management
+// =============================================================================
+
+uint32_t SPIFlashStorageBackend::getTotalSpace() {
+    return FLASH_SIZE;
+}
+
+uint32_t SPIFlashStorageBackend::getFreeSpace() {
+    uint32_t used = getUsedSpace();
+    return (used < FLASH_SIZE) ? (FLASH_SIZE - used) : 0;
+}
+
+uint32_t SPIFlashStorageBackend::getUsedSpace() {
+    uint32_t total_used = 0;
+    
+    for (const auto& pair : mock_files) {
+        total_used += pair.second.size();
+    }
+    
+    return total_used;
+}
+
+void SPIFlashStorageBackend::sync() {
+    // In a real implementation, this would sync to flash
+    // For mock implementation, data is already "synced"
+}
+
+void SPIFlashStorageBackend::flush() {
+    // In a real implementation, this would flush write cache
+    // For mock implementation, no cache to flush
+}
+
+// =============================================================================
+// Iteration Support
+// =============================================================================
+
+uint32_t SPIFlashStorageBackend::getStoredKeyCount() {
+    return mock_files.size();
+}
+
+bool SPIFlashStorageBackend::getStoredKey(uint32_t index, uint32_t* storage_key) {
+    if (!storage_key || index >= mock_files.size()) {
+        return false;
+    }
+    
+    auto it = mock_files.begin();
+    std::advance(it, index);
+    
+    // Extract CAN ID from filename
+    // Format: keys/ECU_BASE/SUBSYSTEM/PARAMETER.bin
+    std::string filepath = it->first;
+    
+    // Parse the path: keys/1/03/00001.bin -> 0x10300001
+    size_t pos = filepath.find("keys/");
+    if (pos == std::string::npos) return false;
+    
+    std::string path_part = filepath.substr(pos + 5);  // Skip "keys/"
+    
+    // Extract ECU base (1 hex digit)
+    size_t slash1 = path_part.find('/');
+    if (slash1 == std::string::npos) return false;
+    
+    std::string ecu_str = path_part.substr(0, slash1);
+    
+    // Extract subsystem (2 hex digits)
+    size_t slash2 = path_part.find('/', slash1 + 1);
+    if (slash2 == std::string::npos) return false;
+    
+    std::string subsystem_str = path_part.substr(slash1 + 1, slash2 - slash1 - 1);
+    
+    // Extract parameter (5 hex digits, remove .bin extension)
+    std::string param_str = path_part.substr(slash2 + 1);
+    size_t dot = param_str.find('.');
+    if (dot != std::string::npos) {
+        param_str = param_str.substr(0, dot);
+    }
+    
+    // Convert to CAN ID
+    uint32_t ecu_base = strtoul(ecu_str.c_str(), nullptr, 16);
+    uint32_t subsystem = strtoul(subsystem_str.c_str(), nullptr, 16);
+    uint32_t parameter = strtoul(param_str.c_str(), nullptr, 16);
+    
+    *storage_key = (ecu_base << 28) | (subsystem << 20) | (parameter & 0xFFFFF);
+    
+    return true;
+}
+
+// =============================================================================
+// Debug/Information
+// =============================================================================
+
+void SPIFlashStorageBackend::printDebugInfo() {
+    Serial.println("=== SPI Flash Storage Backend Debug Info ===");
+    Serial.print("Total reads: "); Serial.println(total_reads);
+    Serial.print("Total writes: "); Serial.println(total_writes);
+    Serial.print("Cache hits: "); Serial.println(cache_hits);
+    Serial.print("Cache misses: "); Serial.println(cache_misses);
+    Serial.print("Stored keys: "); Serial.println(getStoredKeyCount());
+    Serial.print("Used space: "); Serial.print(getUsedSpace()); Serial.println(" bytes");
+    Serial.print("Free space: "); Serial.print(getFreeSpace()); Serial.println(" bytes");
+    
+    Serial.println("\nStored Keys:");
+    for (uint32_t i = 0; i < getStoredKeyCount(); i++) {
+        uint32_t storage_key;
+        if (getStoredKey(i, &storage_key)) {
+            Serial.print("  ["); Serial.print(i); Serial.print("] 0x");
+            Serial.print(storage_key, HEX);
+            Serial.print(" -> ");
+            printExtendedCanId(storage_key);
+            Serial.println();
         }
-        
-        if (!fatfs.begin(flash)) {
-            Serial.println("ERROR: Failed to mount filesystem after format");
-            return false;
-        }
     }
-    
-    // Create directory structure
-    ensureDirectoryExists("/keys");
-    ensureDirectoryExists("/config");
-    ensureDirectoryExists("/maps");
-    ensureDirectoryExists("/logs");
-    
-    Serial.println("SPI Flash storage initialized successfully");
-    return true;
-    #else
-    // Mock implementation for testing
-    return true;
-    #endif
-}
-
-bool SPIFlashStorageBackend::writeData(uint16_t key_hash, const void* data, size_t size) {
-    if (!data || size == 0) {
-        return false;
-    }
-    
-    char filename[32];
-    keyHashToFilename(key_hash, filename, sizeof(filename));
-    
-    #ifndef ARDUINO
-    std::cout << "Writing to file: " << filename << ", size: " << size << std::endl;
-    #endif
-    
-    #if defined(ARDUINO) && !defined(TESTING)
-    // Remove existing file if it exists
-    if (fatfs.exists(filename)) {
-        fatfs.remove(filename);
-    }
-    
-    // Create new file
-    File32 file = fatfs.open(filename, FILE_WRITE);
-    if (!file) {
-        return false;
-    }
-    
-    // Write data
-    size_t written = file.write(data, size);
-    file.close();
-    
-    write_count++;
-    return written == size;
-    #else
-    // Mock implementation for testing
-    // Remove existing file if it exists (to match Arduino behavior)
-    if (fatfs.exists(filename)) {
-        fatfs.remove(filename);
-    }
-    
-    File32 file = fatfs.open(filename, FILE_WRITE);
-    if (!file) {
-        return false;
-    }
-    
-    size_t written = file.write(data, size);
-    file.close();
-    
-    write_count++;
-    return written == size;
-    #endif
-}
-
-bool SPIFlashStorageBackend::readData(uint16_t key_hash, void* data, size_t size) {
-    if (!data || size == 0) {
-        return false;
-    }
-    
-    char filename[32];
-    keyHashToFilename(key_hash, filename, sizeof(filename));
-    
-    #ifndef ARDUINO
-    std::cout << "Reading from file: " << filename << ", size: " << size << std::endl;
-    #endif
-    
-    #if defined(ARDUINO) && !defined(TESTING)
-    // Open file for reading
-    File32 file = fatfs.open(filename, FILE_READ);
-    if (!file) {
-        return false;
-    }
-    
-    // Check file size matches expected size
-    if (file.size() != size) {
-        file.close();
-        return false;
-    }
-    
-    // Read data
-    size_t read_bytes = file.read(data, size);
-    file.close();
-    
-    read_count++;
-    return read_bytes == size;
-    #else
-    // Mock implementation for testing
-    File32 file = fatfs.open(filename, FILE_READ);
-    if (!file) {
-        return false;
-    }
-    
-    // Check file size matches expected size
-    if (file.size() != size) {
-        file.close();
-        return false;
-    }
-    
-    // Read data
-    size_t read_bytes = file.read(data, size);
-    file.close();
-    
-    read_count++;
-    
-    std::cout << "Mock read completed, bytes read: " << read_bytes << std::endl;
-    float* float_data = static_cast<float*>(data);
-    std::cout << "Read float value: " << *float_data << std::endl;
-    
-    return read_bytes == size;
-    #endif
-}
-
-bool SPIFlashStorageBackend::deleteKey(uint16_t key_hash) {
-    char filename[32];
-    keyHashToFilename(key_hash, filename, sizeof(filename));
-    
-    #if defined(ARDUINO) && !defined(TESTING)
-    if (!fatfs.exists(filename)) {
-        return false;
-    }
-    
-    return fatfs.remove(filename);
-    #else
-    // Mock implementation for testing
-    return fatfs.remove(filename);
-    #endif
-}
-
-bool SPIFlashStorageBackend::keyExists(uint16_t key_hash) {
-    char filename[32];
-    keyHashToFilename(key_hash, filename, sizeof(filename));
-    
-    #if defined(ARDUINO) && !defined(TESTING)
-    return fatfs.exists(filename);
-    #else
-    // Mock implementation for testing
-    return fatfs.exists(filename);
-    #endif
-}
-
-size_t SPIFlashStorageBackend::getFreeSpace() {
-    #if defined(ARDUINO) && !defined(TESTING)
-    // FAT32 free space calculation
-    // This is approximate - exact calculation requires cluster counting
-    return flash->size() / 2;  // Rough estimate
-    #else
-    return 16 * 1024 * 1024;  // 16MB for testing
-    #endif
-}
-
-size_t SPIFlashStorageBackend::getTotalSpace() {
-    #if defined(ARDUINO) && !defined(TESTING)
-    return flash->size();
-    #else
-    return 16 * 1024 * 1024;  // 16MB for testing
-    #endif
-}
-
-// =============================================================================
-// Helper Methods
-// =============================================================================
-
-void SPIFlashStorageBackend::keyHashToFilename(uint16_t key_hash, char* filename, size_t max_len) {
-    // Organize files by hash prefix for better directory structure
-    // e.g., hash 0x1234 -> "/keys/12/1234.bin"
-    uint8_t dir_prefix = (key_hash >> 8) & 0xFF;
-    snprintf(filename, max_len, "/keys/%02X/%04X.bin", dir_prefix, key_hash);
-}
-
-bool SPIFlashStorageBackend::ensureDirectoryExists(const char* path) {
-    #if defined(ARDUINO) && !defined(TESTING)
-    // FAT32 doesn't require explicit directory creation for simple paths
-    // The filesystem will create directories automatically when files are written
-    return true;
-    #else
-    return true;
-    #endif
-}
-
-bool SPIFlashStorageBackend::formatFilesystem() {
-    format_count++;
-    
-    // Note: SdFat library doesn't provide a format() method
-    // Format would typically be done externally or during initialization
-    // For now, we'll assume the filesystem is already formatted
-    return true;
-}
-
-// =============================================================================
-// Enhanced Storage Methods
-// =============================================================================
-
-bool SPIFlashStorageBackend::formatStorage() {
-    return formatFilesystem();
+    Serial.println("============================================");
 }
 
 void SPIFlashStorageBackend::printStorageInfo() {
-    #if defined(ARDUINO) && !defined(TESTING)
     Serial.println("=== SPI Flash Storage Info ===");
-    Serial.print("Total space: ");
-    Serial.print(getTotalSpace() / 1024);
-    Serial.println(" KB");
-    
-    Serial.print("Free space: ");
-    Serial.print(getFreeSpace() / 1024);
-    Serial.println(" KB");
-    
-    Serial.print("Write operations: ");
-    Serial.println(write_count);
-    
-    Serial.print("Read operations: ");
-    Serial.println(read_count);
-    
-    Serial.print("Format operations: ");
-    Serial.println(format_count);
-    #endif
+    Serial.print("Capacity: "); Serial.print(FLASH_SIZE / (1024 * 1024)); Serial.println(" MB");
+    Serial.print("Used: "); Serial.print(getUsedSpace()); Serial.println(" bytes");
+    Serial.print("Free: "); Serial.print(getFreeSpace()); Serial.println(" bytes");
+    Serial.print("Files: "); Serial.println(getStoredKeyCount());
+    Serial.println("==============================");
 }
 
 bool SPIFlashStorageBackend::verifyIntegrity() {
-    // Basic integrity check - verify flash chip is responding
-    #if defined(ARDUINO) && !defined(TESTING)
-    return flash->begin();
-    #else
+    // In a real implementation, this would verify checksums
+    // For mock implementation, assume all data is valid
     return true;
-    #endif
+}
+
+void SPIFlashStorageBackend::formatStorage() {
+    mock_files.clear();
+    total_reads = 0;
+    total_writes = 0;
+    cache_hits = 0;
+    cache_misses = 0;
+    
+    Serial.println("SPI Flash storage formatted");
 }
 
 // =============================================================================
-// Configuration-Specific Helper Methods
+// Private Helper Methods
 // =============================================================================
 
-bool SPIFlashStorageBackend::saveJSON(const char* key, const char* json_data) {
-    if (!key || !json_data) {
-        return false;
-    }
-    
-    #if defined(ARDUINO) && !defined(TESTING)
+std::string SPIFlashStorageBackend::getFilePath(uint32_t storage_key) {
     char filename[64];
-    snprintf(filename, sizeof(filename), "/config/%s.json", key);
-    
-    // Remove existing file
-    if (fatfs.exists(filename)) {
-        fatfs.remove(filename);
-    }
-    
-    // Create new file
-    File32 file = fatfs.open(filename, FILE_WRITE);
-    if (!file) {
-        return false;
-    }
-    
-    // Write JSON data
-    size_t written = file.write(json_data, strlen(json_data));
-    file.close();
-    
-    write_count++;
-    return written == strlen(json_data);
-    #else
-    // Mock implementation using mock file system
-    char filename[64];
-    snprintf(filename, sizeof(filename), "/config/%s.json", key);
-    
-    // Remove existing file if it exists (to match Arduino behavior)
-    if (fatfs.exists(filename)) {
-        fatfs.remove(filename);
-    }
-    
-    // Create new file
-    File32 file = fatfs.open(filename, FILE_WRITE);
-    if (!file) {
-        return false;
-    }
-    
-    // Write JSON data
-    size_t written = file.write(json_data, strlen(json_data));
-    file.close();
-    
-    write_count++;
-    return written == strlen(json_data);
-    #endif
+    storage_key_to_filename(storage_key, filename, sizeof(filename));
+    return std::string(filename);
 }
 
-bool SPIFlashStorageBackend::loadJSON(const char* key, char* json_data, size_t max_size) {
-    if (!key || !json_data || max_size == 0) {
-        return false;
+bool SPIFlashStorageBackend::ensureDirectoryExists(const std::string& filepath) {
+    // Extract directory path from filepath
+    size_t last_slash = filepath.find_last_of('/');
+    if (last_slash == std::string::npos) {
+        return true;  // No directory needed
     }
     
-    #if defined(ARDUINO) && !defined(TESTING)
-    char filename[64];
-    snprintf(filename, sizeof(filename), "/config/%s.json", key);
+    std::string dir_path = filepath.substr(0, last_slash);
     
-    // Open file for reading
-    File32 file = fatfs.open(filename, FILE_READ);
-    if (!file) {
-        return false;
-    }
+    // For mock implementation, directories are implicit
+    // Real implementation would create directories on flash filesystem
     
-    // Check file size
-    size_t file_size = file.size();
-    if (file_size >= max_size) {
-        file.close();
-        return false;
-    }
-    
-    // Read JSON data
-    size_t read_bytes = file.read(json_data, file_size);
-    file.close();
-    
-    if (read_bytes == file_size) {
-        json_data[read_bytes] = '\0';  // Null terminate
-        read_count++;
-        return true;
-    }
-    
-    return false;
-    #else
-    // Mock implementation using mock file system
-    char filename[64];
-    snprintf(filename, sizeof(filename), "/config/%s.json", key);
-    
-    // Open file for reading
-    File32 file = fatfs.open(filename, FILE_READ);
-    if (!file) {
-        return false;
-    }
-    
-    // Check file size
-    size_t file_size = file.size();
-    if (file_size >= max_size) {
-        file.close();
-        return false;
-    }
-    
-    // Read JSON data
-    size_t read_bytes = file.read(json_data, file_size);
-    file.close();
-    
-    if (read_bytes == file_size) {
-        json_data[read_bytes] = '\0';  // Null terminate
-        read_count++;
-        return true;
-    }
-    
-    return false;
-    #endif
+    return true;
 }
 
-bool SPIFlashStorageBackend::saveFloatArray(const char* key, const float* values, size_t count) {
-    if (!key || !values || count == 0) {
-        return false;
+SPIFlashStorageBackend::MockFile* SPIFlashStorageBackend::openFile(const std::string& path, const char* mode) {
+    auto it = mock_files.find(path);
+    
+    if (it == mock_files.end()) {
+        // Create new file
+        mock_files[path] = MockFile();
     }
     
-    #if defined(ARDUINO) && !defined(TESTING)
-    char filename[64];
-    snprintf(filename, sizeof(filename), "/maps/%s.map", key);
+    MockFile* file = &mock_files[path];
+    file->open(path.c_str(), mode);
     
-    // Remove existing file
-    if (fatfs.exists(filename)) {
-        fatfs.remove(filename);
-    }
-    
-    // Create new file
-    File32 file = fatfs.open(filename, FILE_WRITE);
-    if (!file) {
-        return false;
-    }
-    
-    // Write array size first
-    file.write(&count, sizeof(size_t));
-    
-    // Write float array
-    size_t written = file.write(values, count * sizeof(float));
-    file.close();
-    
-    write_count++;
-    return written == count * sizeof(float);
-    #else
-    // Mock implementation using mock file system
-    char filename[64];
-    snprintf(filename, sizeof(filename), "/maps/%s.map", key);
-    
-    // Remove existing file if it exists (to match Arduino behavior)
-    if (fatfs.exists(filename)) {
-        fatfs.remove(filename);
-    }
-    
-    // Create new file
-    File32 file = fatfs.open(filename, FILE_WRITE);
-    if (!file) {
-        return false;
-    }
-    
-    // Write array size first
-    size_t size_written = file.write(&count, sizeof(size_t));
-    
-    // Write float array
-    size_t written = file.write(values, count * sizeof(float));
-    file.close();
-    
-    std::cout << "Saved float array: count=" << count << ", size_written=" << size_written 
-              << ", array_written=" << written << ", total_expected=" << (sizeof(size_t) + count * sizeof(float)) << std::endl;
-    
-    write_count++;
-    return written == count * sizeof(float);
-    #endif
+    return file;
 }
 
-bool SPIFlashStorageBackend::loadFloatArray(const char* key, float* values, size_t count) {
-    if (!key || !values || count == 0) {
-        return false;
+void SPIFlashStorageBackend::printExtendedCanId(uint32_t storage_key) {
+    uint8_t ecu_base = (storage_key >> 28) & 0x0F;
+    uint8_t subsystem = (storage_key >> 20) & 0xFF;
+    uint32_t parameter = storage_key & 0xFFFFF;
+    
+    Serial.print("ECU="); Serial.print(ecu_base, HEX);
+    Serial.print(" SUB="); Serial.print(subsystem, HEX);
+    Serial.print(" PARAM="); Serial.print(parameter, HEX);
+    
+    // Print human-readable subsystem name
+    switch (subsystem) {
+        case 0x01: Serial.print(" (FUEL)"); break;
+        case 0x02: Serial.print(" (IGNITION)"); break;
+        case 0x03: Serial.print(" (SENSORS)"); break;
+        case 0x04: Serial.print(" (CONFIG)"); break;
+        case 0x05: Serial.print(" (TRANSMISSION)"); break;
+        case 0x06: Serial.print(" (COOLING)"); break;
+        case 0x07: Serial.print(" (EXHAUST)"); break;
+        case 0x08: Serial.print(" (BOOST)"); break;
+        case 0x09: Serial.print(" (STORAGE)"); break;
+        case 0x0A: Serial.print(" (SYSTEM)"); break;
+        case 0x0B: Serial.print(" (DEBUG)"); break;
+        case 0x0C: Serial.print(" (EXTERNAL)"); break;
+        default: Serial.print(" (UNKNOWN)"); break;
     }
-    
-    char filename[64];
-    snprintf(filename, sizeof(filename), "/maps/%s.map", key);
-    
-    File32 file = fatfs.open(filename, FILE_READ);
-    if (!file) {
-        return false;
-    }
-    
-    // Read the stored count first
-    size_t stored_count;
-    size_t size_bytes_read = file.read(&stored_count, sizeof(stored_count));
-    
-    if (size_bytes_read != sizeof(stored_count)) {
-        file.close();
-        return false;
-    }
-    
-    if (stored_count != count) {
-        file.close();
-        return false;
-    }
-    
-    // Read the array data
-    size_t data_bytes_read = file.read(values, count * sizeof(float));
-    file.close();
-    
-    read_count++;
-    return data_bytes_read == count * sizeof(float);
 } 

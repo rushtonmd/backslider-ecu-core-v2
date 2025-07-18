@@ -1,5 +1,5 @@
 // msg_definitions.h
-// CAN-style message definitions for Backslider ECU
+// CAN-style message definitions for Backslider ECU - Extended CAN ID Architecture
 
 #ifndef MSG_DEFINITIONS_H
 #define MSG_DEFINITIONS_H
@@ -10,46 +10,328 @@
 // Use FlexCAN message format on Arduino, mock for desktop testing
 #ifdef ARDUINO
     #include <FlexCAN_T4.h>
+    // Use FlexCAN_T4 extended message structure
     typedef CAN_message_t CANMessage;
 #else
-    // Mock CAN message structure for desktop testing
+    // Mock CAN message structure for desktop testing - extended CAN support
     typedef struct {
-        uint32_t id;          // Message ID (11-bit)
+        uint32_t id;          // Message ID (29-bit extended)
         uint8_t len;          // Data length (0-8 bytes)
         uint8_t buf[8];       // Data payload
         uint32_t timestamp;   // Timestamp (for compatibility)
+        struct {
+            uint8_t extended : 1;  // Extended CAN ID flag
+            uint8_t remote : 1;    // Remote frame flag
+            uint8_t reserved : 6;  // Reserved bits
+        } flags;
     } CANMessage;
 #endif
 
-// CAN Message IDs - Organized by priority (lower ID = higher priority)
+// =============================================================================
+// EXTENDED CAN ID ARCHITECTURE
+// =============================================================================
 
-// High Priority: Critical real-time data (0x010-0x0FF)
-#define MSG_ENGINE_RPM          0x010    // Engine RPM (float, Hz)
-#define MSG_CRANK_POSITION      0x011    // Crank angle (uint16_t, degrees)
-#define MSG_THROTTLE_POSITION   0x012    // Throttle % (float, 0-100)
-#define MSG_MANIFOLD_PRESSURE   0x013    // MAP (float, kPa)
-#define MSG_TIMING_TRIGGER      0x014    // Timing trigger event (uint8_t)
-#define MSG_VEHICLE_SPEED       0x015    // Vehicle speed (float, MPH)
-#define MSG_BRAKE_PEDAL         0x016    // Brake pedal state (float, 0=off 1=on)
+// 29-bit Extended CAN ID Structure: [ECU_BASE(4)] [SUBSYSTEM(8)] [PARAMETER(17)]
+#define ECU_BASE_MASK           0xF0000000  // ECU identifier (4 bits)
+#define SUBSYSTEM_MASK          0x0FF00000  // Subsystem identifier (8 bits)
+#define PARAMETER_MASK          0x000FFFFF  // Parameter identifier (20 bits)
 
-// Medium Priority: Control commands (0x100-0x1FF)
-#define MSG_IGNITION_TIMING     0x100    // Timing advance (float, degrees)
-#define MSG_FUEL_PULSE_WIDTH    0x101    // Injection time (float, ms)
-#define MSG_IDLE_TARGET_RPM     0x102    // Target idle (uint16_t, RPM)
-#define MSG_BOOST_TARGET        0x103    // Boost target (float, kPa)
+// ECU Base Addresses (4 bits = 16 possible ECUs)
+#define ECU_BASE_PRIMARY        0x10000000  // Primary ECU (engine timing)
+#define ECU_BASE_SECONDARY      0x20000000  // Secondary ECU (control/logging)
+#define ECU_BASE_DASHBOARD      0x30000000  // Dashboard/display unit
+#define ECU_BASE_DATALOGGER     0x40000000  // Data logging ECU
+#define ECU_BASE_DIAGNOSTIC     0x50000000  // Diagnostic equipment
+#define ECU_BASE_TUNING         0x60000000  // Tuning software/tablet
+#define ECU_BASE_RESERVED_1     0x70000000  // Reserved for future use
+#define ECU_BASE_RESERVED_2     0x80000000  // Reserved for future use
 
-// Low Priority: Status/diagnostics (0x200-0x2FF)
-#define MSG_COOLANT_TEMP        0x200    // Coolant temp (float, °C)
-#define MSG_AIR_INTAKE_TEMP     0x201    // IAT (float, °C)
-#define MSG_BATTERY_VOLTAGE     0x202    // Battery (float, volts)
-#define MSG_OIL_PRESSURE        0x203    // Oil pressure (float, kPa)
-#define MSG_ENGINE_STATUS       0x204    // Status flags (uint8_t, bitfield)
-#define MSG_ERROR_CODES         0x205    // Error codes (uint16_t, bitfield)
+// Subsystem Identifiers (8 bits = 256 possible subsystems)
+#define SUBSYSTEM_FUEL          0x00100000  // Fuel injection system
+#define SUBSYSTEM_IGNITION      0x00200000  // Ignition timing system
+#define SUBSYSTEM_SENSORS       0x00300000  // Sensor readings
+#define SUBSYSTEM_CONFIG        0x00400000  // Configuration parameters
+#define SUBSYSTEM_TRANSMISSION  0x00500000  // Transmission control
+#define SUBSYSTEM_COOLING       0x00600000  // Cooling system
+#define SUBSYSTEM_EXHAUST       0x00700000  // Exhaust system
+#define SUBSYSTEM_BOOST         0x00800000  // Turbo/supercharger
+#define SUBSYSTEM_STORAGE       0x00900000  // Storage operations
+#define SUBSYSTEM_SYSTEM        0x00A00000  // System messages
+#define SUBSYSTEM_DEBUG         0x00B00000  // Debug/diagnostic messages
+#define SUBSYSTEM_EXTERNAL      0x00C00000  // External communications
 
-// System Messages (0x300-0x3FF)
-#define MSG_HEARTBEAT           0x300    // Module heartbeat (uint32_t, counter)
-#define MSG_SYSTEM_TIME         0x301    // System uptime (uint32_t, ms)
-#define MSG_DEBUG_MESSAGE       0x302    // Debug info (uint32_t)
+// Extended CAN ID Generation Macros
+#define MAKE_EXTENDED_CAN_ID(ecu_base, subsystem, parameter) \
+    ((ecu_base) | (subsystem) | ((parameter) & PARAMETER_MASK))
+
+#define GET_ECU_BASE(id)        ((id) & ECU_BASE_MASK)
+#define GET_SUBSYSTEM(id)       ((id) & SUBSYSTEM_MASK)
+#define GET_PARAMETER(id)       ((id) & PARAMETER_MASK)
+
+// Common parameter ID generators
+#define SENSOR_ID(sensor_type)          (sensor_type)
+#define MAP_CELL_ID(row, col)           (((row) << 8) | (col))
+#define CONFIG_ID(config_type)          (config_type)
+#define CONTROL_ID(control_type)        (0x100 + (control_type))  // Control messages start at 0x100 to avoid sensor collisions
+
+// =============================================================================
+// SENSOR MESSAGE DEFINITIONS
+// =============================================================================
+
+// Primary ECU - Sensor readings (real-time, high priority)
+#define MSG_ENGINE_RPM          MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SENSORS, SENSOR_ID(0x01))
+#define MSG_VEHICLE_SPEED       MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SENSORS, SENSOR_ID(0x02))
+#define MSG_COOLANT_TEMP        MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SENSORS, SENSOR_ID(0x03))
+#define MSG_THROTTLE_POSITION   MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SENSORS, SENSOR_ID(0x04))
+#define MSG_MANIFOLD_PRESSURE   MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SENSORS, SENSOR_ID(0x05))
+#define MSG_AIR_INTAKE_TEMP     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SENSORS, SENSOR_ID(0x06))
+#define MSG_BATTERY_VOLTAGE     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SENSORS, SENSOR_ID(0x07))
+#define MSG_OIL_PRESSURE        MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SENSORS, SENSOR_ID(0x08))
+#define MSG_CRANK_POSITION      MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SENSORS, SENSOR_ID(0x09))
+#define MSG_TIMING_TRIGGER      MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SENSORS, SENSOR_ID(0x0A))
+#define MSG_BRAKE_PEDAL         MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SENSORS, SENSOR_ID(0x0B))
+
+// =============================================================================
+// CONTROL MESSAGE DEFINITIONS
+// =============================================================================
+
+// Primary ECU - Control outputs (medium priority)
+#define MSG_IGNITION_TIMING     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_IGNITION, CONTROL_ID(0x01))
+#define MSG_FUEL_PULSE_WIDTH    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x01))
+#define MSG_IDLE_TARGET_RPM     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x02))
+#define MSG_BOOST_TARGET        MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_BOOST, CONTROL_ID(0x01))
+
+// Engine output controls
+#define MSG_IGNITION_COIL_1     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_IGNITION, CONTROL_ID(0x10))
+#define MSG_IGNITION_COIL_2     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_IGNITION, CONTROL_ID(0x11))
+#define MSG_IGNITION_COIL_3     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_IGNITION, CONTROL_ID(0x12))
+#define MSG_IGNITION_COIL_4     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_IGNITION, CONTROL_ID(0x13))
+#define MSG_IGNITION_COIL_5     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_IGNITION, CONTROL_ID(0x14))
+#define MSG_IGNITION_COIL_6     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_IGNITION, CONTROL_ID(0x15))
+#define MSG_IGNITION_COIL_7     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_IGNITION, CONTROL_ID(0x16))
+#define MSG_IGNITION_COIL_8     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_IGNITION, CONTROL_ID(0x17))
+
+#define MSG_FUEL_INJECTOR_1     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x10))
+#define MSG_FUEL_INJECTOR_2     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x11))
+#define MSG_FUEL_INJECTOR_3     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x12))
+#define MSG_FUEL_INJECTOR_4     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x13))
+#define MSG_FUEL_INJECTOR_5     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x14))
+#define MSG_FUEL_INJECTOR_6     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x15))
+#define MSG_FUEL_INJECTOR_7     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x16))
+#define MSG_FUEL_INJECTOR_8     MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x17))
+
+// Auxiliary control outputs
+#define MSG_IDLE_VALVE_CONTROL  MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x20))
+#define MSG_FUEL_PUMP_CONTROL   MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, CONTROL_ID(0x21))
+#define MSG_FAN_CONTROL         MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_COOLING, CONTROL_ID(0x01))
+#define MSG_A_C_CLUTCH_CONTROL  MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_COOLING, CONTROL_ID(0x02))
+#define MSG_ALTERNATOR_FIELD    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SYSTEM, CONTROL_ID(0x01))
+#define MSG_BOOST_CONTROL       MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_BOOST, CONTROL_ID(0x10))
+#define MSG_WASTEGATE_CONTROL   MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_BOOST, CONTROL_ID(0x11))
+#define MSG_SHIFT_LIGHT         MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SYSTEM, CONTROL_ID(0x10))
+#define MSG_STATUS_LED          MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SYSTEM, CONTROL_ID(0x11))
+
+// Gauge outputs
+#define MSG_BOOST_GAUGE         MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_EXTERNAL, CONTROL_ID(0x01))
+#define MSG_TEMP_GAUGE          MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_EXTERNAL, CONTROL_ID(0x02))
+#define MSG_FUEL_GAUGE          MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_EXTERNAL, CONTROL_ID(0x03))
+#define MSG_OIL_PRESSURE_GAUGE  MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_EXTERNAL, CONTROL_ID(0x04))
+#define MSG_TACH_OUTPUT         MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_EXTERNAL, CONTROL_ID(0x05))
+#define MSG_SPEEDO_OUTPUT       MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_EXTERNAL, CONTROL_ID(0x06))
+
+// =============================================================================
+// TRANSMISSION MESSAGE DEFINITIONS
+// =============================================================================
+
+// Transmission sensor inputs
+#define MSG_TRANS_FLUID_TEMP    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, SENSOR_ID(0x01))
+#define MSG_PADDLE_UPSHIFT      MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, SENSOR_ID(0x02))
+#define MSG_PADDLE_DOWNSHIFT    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, SENSOR_ID(0x03))
+#define MSG_TRANS_PARK_SWITCH   MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, SENSOR_ID(0x04))
+#define MSG_TRANS_REVERSE_SWITCH MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, SENSOR_ID(0x05))
+#define MSG_TRANS_NEUTRAL_SWITCH MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, SENSOR_ID(0x06))
+#define MSG_TRANS_DRIVE_SWITCH  MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, SENSOR_ID(0x07))
+#define MSG_TRANS_SECOND_SWITCH MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, SENSOR_ID(0x08))
+#define MSG_TRANS_FIRST_SWITCH  MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, SENSOR_ID(0x09))
+#define MSG_TRANS_INPUT_SPEED   MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, SENSOR_ID(0x0A))
+#define MSG_TRANS_OUTPUT_SPEED  MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, SENSOR_ID(0x0B))
+
+// Transmission state messages
+#define MSG_TRANS_CURRENT_GEAR  MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x01))
+#define MSG_TRANS_SHIFT_REQUEST MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x02))
+#define MSG_TRANS_STATE_VALID   MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x03))
+#define MSG_TRANS_OVERRUN_STATE MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x05))
+
+// Transmission output controls
+#define MSG_TRANS_SHIFT_SOL_A   MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x10))
+#define MSG_TRANS_SHIFT_SOL_B   MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x11))
+#define MSG_TRANS_OVERRUN_SOL   MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x12))
+#define MSG_TRANS_PRESSURE_SOL  MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x13))
+#define MSG_TRANS_LOCKUP_SOL    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x14))
+
+// =============================================================================
+// SYSTEM MESSAGE DEFINITIONS
+// =============================================================================
+
+// System messages (low priority)
+#define MSG_HEARTBEAT           MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SYSTEM, 0x01)
+#define MSG_SYSTEM_TIME         MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SYSTEM, 0x02)
+#define MSG_DEBUG_MESSAGE       MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_DEBUG, 0x01)
+#define MSG_ENGINE_STATUS       MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SYSTEM, 0x03)
+#define MSG_ERROR_CODES         MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_SYSTEM, 0x04)
+
+// =============================================================================
+// MAP CELL DIRECT ADDRESSING
+// =============================================================================
+
+// Fuel Map Cells - Direct addressing (30x30 grid)
+#define MSG_FUEL_MAP_CELL(row, col) \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_FUEL, MAP_CELL_ID(row, col))
+
+// Ignition Map Cells - Direct addressing (30x30 grid)
+#define MSG_IGNITION_MAP_CELL(row, col) \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_IGNITION, MAP_CELL_ID(row, col))
+
+// Boost Map Cells - Direct addressing (20x20 grid)
+#define MSG_BOOST_MAP_CELL(row, col) \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_BOOST, MAP_CELL_ID(row, col))
+
+// =============================================================================
+// CONFIGURATION PARAMETERS
+// =============================================================================
+
+// Fuel system configuration
+#define MSG_CONFIG_FUEL_BASE_PRESSURE \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_CONFIG, CONFIG_ID(0x01))
+#define MSG_CONFIG_FUEL_INJECTOR_FLOW \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_CONFIG, CONFIG_ID(0x02))
+#define MSG_CONFIG_FUEL_PUMP_PRESSURE \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_CONFIG, CONFIG_ID(0x03))
+
+// Ignition system configuration
+#define MSG_CONFIG_IGNITION_BASE_TIMING \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_CONFIG, CONFIG_ID(0x10))
+#define MSG_CONFIG_IGNITION_DWELL_TIME \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_CONFIG, CONFIG_ID(0x11))
+#define MSG_CONFIG_IGNITION_COIL_CHARGE \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_CONFIG, CONFIG_ID(0x12))
+
+// Engine configuration
+#define MSG_CONFIG_ENGINE_DISPLACEMENT \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_CONFIG, CONFIG_ID(0x20))
+#define MSG_CONFIG_ENGINE_COMPRESSION \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_CONFIG, CONFIG_ID(0x21))
+#define MSG_CONFIG_ENGINE_REDLINE \
+    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_CONFIG, CONFIG_ID(0x22))
+
+// =============================================================================
+// STORAGE OPERATIONS
+// =============================================================================
+
+// Storage operations using extended CAN IDs as keys
+#define MSG_STORAGE_SAVE        MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x01)
+#define MSG_STORAGE_LOAD        MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x02)
+#define MSG_STORAGE_DELETE      MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x03)
+#define MSG_STORAGE_COMMIT      MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x04)
+
+// Storage responses
+#define MSG_STORAGE_SAVE_RESPONSE MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x11)
+#define MSG_STORAGE_LOAD_RESPONSE MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x12)
+#define MSG_STORAGE_ERROR       MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x13)
+#define MSG_STORAGE_STATS       MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x14)
+
+// Storage export operations
+#define MSG_STORAGE_EXPORT_REQUEST  MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x20)
+#define MSG_STORAGE_EXPORT_START    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x21)
+#define MSG_STORAGE_EXPORT_KEY      MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x22)
+#define MSG_STORAGE_EXPORT_COMPLETE MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_STORAGE, 0x23)
+
+// =============================================================================
+// STORAGE MESSAGE STRUCTURES
+// =============================================================================
+
+// Storage save message (using CAN ID as key)
+typedef struct {
+    uint32_t storage_key;       // Extended CAN ID used as storage key (4 bytes)
+    float value;                // Value to store (4 bytes)
+} __attribute__((packed)) storage_save_float_msg_t;
+
+// Storage load message (using CAN ID as key)
+typedef struct {
+    uint32_t storage_key;       // Extended CAN ID used as storage key (4 bytes)
+    float default_value;        // Default value if key not found (4 bytes)
+} __attribute__((packed)) storage_load_float_msg_t;
+
+// Storage load response message
+typedef struct {
+    uint32_t storage_key;       // Extended CAN ID used as storage key (4 bytes)
+    float value;                // Retrieved value (4 bytes)
+} __attribute__((packed)) storage_load_response_msg_t;
+
+// Storage save response message
+typedef struct {
+    uint32_t storage_key;       // Extended CAN ID used as storage key (4 bytes)
+    uint8_t success;            // 1=success, 0=failed (1 byte)
+    uint8_t reserved[3];        // Padding to 8 bytes
+} __attribute__((packed)) storage_save_response_msg_t;
+
+// Storage error message
+typedef struct {
+    uint32_t storage_key;       // Extended CAN ID used as storage key (4 bytes)
+    uint8_t error_code;         // Error code (1 byte)
+    uint8_t reserved[3];        // Padding to 8 bytes
+} __attribute__((packed)) storage_error_msg_t;
+
+// Storage statistics message
+typedef struct {
+    uint32_t cache_hits;        // Number of cache hits
+    uint32_t cache_misses;      // Number of cache misses
+    uint32_t disk_writes;       // Number of disk writes
+    uint32_t disk_reads;        // Number of disk reads
+    uint16_t cache_size;        // Current cache entries
+    uint16_t free_space_kb;     // Free storage space (KB)
+} storage_stats_msg_t;
+
+// Storage export request message
+typedef struct {
+    uint8_t export_type;        // 0=all, 1=fuel_map, 2=ignition_map, 3=settings
+    uint8_t ecu_filter;         // ECU base filter (0=all, 1=primary, etc.)
+    uint8_t subsystem_filter;   // Subsystem filter (0=all, 1=fuel, 2=ignition, etc.)
+    uint8_t reserved[5];        // Padding to 8 bytes
+} storage_export_request_msg_t;
+
+// Storage export start message
+typedef struct {
+    uint16_t total_keys;        // Total number of keys to export
+    uint8_t success;            // 1=ready, 0=error
+    uint8_t reserved[5];        // Padding to 8 bytes
+} storage_export_start_msg_t;
+
+// Storage export key-value message
+typedef struct {
+    uint32_t storage_key;       // Extended CAN ID key
+    float value;                // Value
+} storage_export_key_msg_t;
+
+// Storage export complete message
+typedef struct {
+    uint16_t keys_sent;         // Actual number of keys sent
+    uint8_t success;            // 1=complete, 0=error
+    uint8_t reserved[5];        // Padding to 8 bytes
+} storage_export_complete_msg_t;
+
+// =============================================================================
+// CONSTANTS AND ENUMS
+// =============================================================================
+
+// Storage error codes
+#define STORAGE_ERROR_SUCCESS           0x00
+#define STORAGE_ERROR_KEY_NOT_FOUND     0x01
+#define STORAGE_ERROR_STORAGE_FULL      0x02
+#define STORAGE_ERROR_WRITE_FAILED      0x03
+#define STORAGE_ERROR_READ_FAILED       0x04
+#define STORAGE_ERROR_INVALID_KEY       0x05
+#define STORAGE_ERROR_CACHE_FULL        0x06
 
 // Engine status bitfield definitions
 #define ENGINE_STATUS_RUNNING   0x01
@@ -67,76 +349,8 @@
 #define ERROR_FUEL_SYSTEM_FAULT 0x0020
 
 // =============================================================================
-// TRANSMISSION MESSAGE IDs
+// HELPER MACROS
 // =============================================================================
-
-// Transmission sensor inputs (0x400-0x40F range to avoid conflicts)
-#define MSG_TRANS_FLUID_TEMP        0x400   // Transmission fluid temperature
-#define MSG_PADDLE_UPSHIFT          0x401   // Upshift paddle pressed
-#define MSG_PADDLE_DOWNSHIFT        0x402   // Downshift paddle pressed
-#define MSG_TRANS_PARK_SWITCH       0x403   // Park position switch
-#define MSG_TRANS_REVERSE_SWITCH    0x404   // Reverse position switch
-#define MSG_TRANS_NEUTRAL_SWITCH    0x405   // Neutral position switch
-#define MSG_TRANS_DRIVE_SWITCH      0x406   // Drive position switch
-#define MSG_TRANS_SECOND_SWITCH     0x407   // Second gear position switch
-#define MSG_TRANS_FIRST_SWITCH      0x408   // First gear position switch
-#define MSG_TRANS_INPUT_SPEED       0x409   // Transmission input shaft speed (RPM)
-#define MSG_TRANS_OUTPUT_SPEED      0x40A   // Transmission output shaft speed (RPM)
-
-// Combined transmission state messages (0x410-0x41F range)
-#define MSG_TRANS_CURRENT_GEAR      0x410   // Current gear position
-#define MSG_TRANS_SHIFT_REQUEST     0x411   // Shift request (up/down)
-#define MSG_TRANS_STATE_VALID       0x412   // Transmission state validity
-#define MSG_TRANS_OVERRUN_STATE     0x413   // Current overrun clutch state (0=ENGAGED, 1=DISENGAGED)
-
-
-// =============================================================================
-// OUTPUT CONTROL MESSAGE IDs
-// =============================================================================
-
-// Engine output controls (0x500-0x50F range)
-#define MSG_IGNITION_COIL_1         0x500   // Ignition coil 1 control
-#define MSG_IGNITION_COIL_2         0x501   // Ignition coil 2 control
-#define MSG_IGNITION_COIL_3         0x502   // Ignition coil 3 control
-#define MSG_IGNITION_COIL_4         0x503   // Ignition coil 4 control
-#define MSG_IGNITION_COIL_5         0x504   // Ignition coil 5 control
-#define MSG_IGNITION_COIL_6         0x505   // Ignition coil 6 control
-#define MSG_IGNITION_COIL_7         0x506   // Ignition coil 7 control
-#define MSG_IGNITION_COIL_8         0x507   // Ignition coil 8 control
-#define MSG_FUEL_INJECTOR_1         0x508   // Fuel injector 1 control
-#define MSG_FUEL_INJECTOR_2         0x509   // Fuel injector 2 control
-#define MSG_FUEL_INJECTOR_3         0x50A   // Fuel injector 3 control
-#define MSG_FUEL_INJECTOR_4         0x50B   // Fuel injector 4 control
-#define MSG_FUEL_INJECTOR_5         0x50C   // Fuel injector 5 control
-#define MSG_FUEL_INJECTOR_6         0x50D   // Fuel injector 6 control
-#define MSG_FUEL_INJECTOR_7         0x50E   // Fuel injector 7 control
-#define MSG_FUEL_INJECTOR_8         0x50F   // Fuel injector 8 control
-
-// Transmission output controls (0x510-0x51F range)
-#define MSG_TRANS_SHIFT_SOL_A       0x510   // Shift Solenoid A control
-#define MSG_TRANS_SHIFT_SOL_B       0x511   // Shift Solenoid B control
-#define MSG_TRANS_OVERRUN_SOL       0x512   // Overrun solenoid control
-#define MSG_TRANS_PRESSURE_SOL      0x513   // Line pressure solenoid control (PWM)
-#define MSG_TRANS_LOCKUP_SOL        0x514   // Lockup solenoid control
-
-// Auxiliary output controls (0x520-0x52F range)
-#define MSG_IDLE_VALVE_CONTROL      0x520   // Idle air control valve
-#define MSG_FUEL_PUMP_CONTROL       0x521   // Fuel pump relay control
-#define MSG_FAN_CONTROL             0x522   // Cooling fan control
-#define MSG_A_C_CLUTCH_CONTROL      0x523   // A/C compressor clutch
-#define MSG_ALTERNATOR_FIELD        0x524   // Alternator field control
-#define MSG_BOOST_CONTROL           0x525   // Boost control solenoid
-#define MSG_WASTEGATE_CONTROL       0x526   // Wastegate control
-#define MSG_SHIFT_LIGHT             0x527   // Shift light control
-#define MSG_STATUS_LED              0x528   // Status LED control
-
-// Gauge output controls (0x530-0x53F range)
-#define MSG_BOOST_GAUGE             0x530   // Boost gauge output
-#define MSG_TEMP_GAUGE              0x531   // Temperature gauge output
-#define MSG_FUEL_GAUGE              0x532   // Fuel level gauge output
-#define MSG_OIL_PRESSURE_GAUGE      0x533   // Oil pressure gauge output
-#define MSG_TACH_OUTPUT             0x534   // Tachometer output
-#define MSG_SPEEDO_OUTPUT           0x535   // Speedometer output
 
 // Helper macros for packing data into CAN messages
 #define MSG_PACK_FLOAT(msg, val) do { \
@@ -169,155 +383,19 @@
 #define MSG_UNPACK_UINT16(msg) (*(uint16_t*)(msg)->buf)
 #define MSG_UNPACK_UINT8(msg) ((msg)->buf[0])
 
-// =============================================================================
-// STORAGE MESSAGE IDs
-// =============================================================================
-
-// Storage operation messages (0x600-0x60F range)
-#define MSG_STORAGE_SAVE_FLOAT      0x600   // Save float value to storage
-#define MSG_STORAGE_LOAD_FLOAT      0x601   // Load float value from storage
-#define MSG_STORAGE_SAVE_INT        0x602   // Save integer value to storage
-#define MSG_STORAGE_LOAD_INT        0x603   // Load integer value from storage
-#define MSG_STORAGE_DELETE_KEY      0x604   // Delete key from storage
-#define MSG_STORAGE_COMMIT_CACHE    0x605   // Force commit of dirty cache entries
-
-// Storage response messages (0x610-0x61F range)
-#define MSG_STORAGE_SAVE_RESPONSE   0x610   // Response to save operation
-#define MSG_STORAGE_LOAD_RESPONSE   0x611   // Response to load operation
-#define MSG_STORAGE_ERROR           0x612   // Storage operation error
-#define MSG_STORAGE_STATS           0x613   // Storage system statistics
-
-// Storage export messages (0x620-0x62F range)
-#define MSG_STORAGE_EXPORT_REQUEST  0x620   // Request data export
-#define MSG_STORAGE_EXPORT_START    0x621   // Export starting
-#define MSG_STORAGE_EXPORT_KEY      0x622   // Individual key-value export
-#define MSG_STORAGE_EXPORT_COMPLETE 0x623   // Export complete
-#define MSG_STORAGE_EXPORT_ERROR    0x624   // Export error
-
-// =============================================================================
-// STORAGE MESSAGE DATA STRUCTURES
-// =============================================================================
-
-// Storage save float message (8 bytes total)
-typedef struct {
-    uint16_t key_hash;          // CRC16 hash of key string (2 bytes)
-    float value;                // Value to store (4 bytes)
-    uint8_t priority;           // 0=cache, 1=immediate write (1 byte)
-    uint8_t sender_id;          // Module ID that sent this request (1 byte)
-} __attribute__((packed)) storage_save_float_msg_t;
-
-// Storage load float message (8 bytes total)
-typedef struct {
-    uint16_t key_hash;          // CRC16 hash of key string (2 bytes)
-    float default_value;        // Default value if key not found (4 bytes)
-    uint8_t sender_id;          // Module ID that sent this request (1 byte)
-    uint8_t request_id;         // For matching responses (1 byte)
-} __attribute__((packed)) storage_load_float_msg_t;
-
-// Storage load response message (8 bytes total)
-typedef struct {
-    uint16_t key_hash;          // CRC16 hash of key string (2 bytes)
-    float value;                // Retrieved value (4 bytes)
-    uint8_t success;            // 1=success, 0=not found (1 byte)
-    uint8_t request_id;         // Matching request ID (1 byte)
-} __attribute__((packed)) storage_load_response_msg_t;
-
-// Storage save response message (4 bytes total)
-typedef struct {
-    uint16_t key_hash;          // CRC16 hash of key string (2 bytes)
-    uint8_t success;            // 1=success, 0=failed (1 byte)
-    uint8_t sender_id;          // Module ID that requested this (1 byte)
-} __attribute__((packed)) storage_save_response_msg_t;
-
-// Storage error message (4 bytes total)
-typedef struct {
-    uint16_t key_hash;          // CRC16 hash of key string (2 bytes)
-    uint8_t error_code;         // Error code (0=success, others=error) (1 byte)
-    uint8_t sender_id;          // Module ID that requested this (1 byte)
-} __attribute__((packed)) storage_error_msg_t;
-
-// Storage statistics message
-typedef struct {
-    uint32_t cache_hits;        // Number of cache hits
-    uint32_t cache_misses;      // Number of cache misses
-    uint32_t disk_writes;       // Number of disk writes
-    uint32_t disk_reads;        // Number of disk reads
-    uint16_t cache_size;        // Current cache entries
-    uint16_t free_space_kb;     // Free storage space (KB)
-} storage_stats_msg_t;
-
-// Storage export request message
-typedef struct {
-    uint8_t export_type;        // 0=all, 1=fuel_map, 2=ignition_map, 3=settings
-    char filter[24];            // Optional key filter pattern
-    uint8_t sender_id;          // Module ID requesting export
-    uint8_t request_id;         // For tracking this export
-} storage_export_request_msg_t;
-
-// Storage export start message
-typedef struct {
-    uint16_t total_keys;        // Total number of keys to export
-    uint8_t request_id;         // Matching request ID
-    uint8_t success;            // 1=ready, 0=error
-} storage_export_start_msg_t;
-
-// Storage export key-value message
-typedef struct {
-    char key[32];               // Storage key
-    float value;                // Value
-    uint16_t sequence_number;   // Order in export (0-based)
-    uint8_t request_id;         // Matching request ID
-} storage_export_key_msg_t;
-
-// Storage export complete message
-typedef struct {
-    uint16_t keys_sent;         // Actual number of keys sent
-    uint8_t request_id;         // Matching request ID
-    uint8_t success;            // 1=complete, 0=error
-} storage_export_complete_msg_t;
-
-// Storage error codes
-#define STORAGE_ERROR_SUCCESS           0x00
-#define STORAGE_ERROR_KEY_NOT_FOUND     0x01
-#define STORAGE_ERROR_STORAGE_FULL      0x02
-#define STORAGE_ERROR_WRITE_FAILED      0x03
-#define STORAGE_ERROR_READ_FAILED       0x04
-#define STORAGE_ERROR_INVALID_KEY       0x05
-#define STORAGE_ERROR_CACHE_FULL        0x06
-
-// CRC16 function for key hashing
-inline uint16_t crc16(const char* data) {
-    uint16_t crc = 0xFFFF;
-    while (*data) {
-        crc ^= (uint16_t)*data++;
-        for (int i = 0; i < 8; i++) {
-            if (crc & 1) {
-                crc = (crc >> 1) ^ 0xA001;
-            } else {
-                crc >>= 1;
-            }
-        }
-    }
-    return crc;
-}
-
-// Helper macros for storage messages
-#define MSG_PACK_STORAGE_SAVE_FLOAT(msg, k, v, p, s) do { \
+// Storage message packing macros
+#define MSG_PACK_STORAGE_SAVE_FLOAT(msg, key, val) do { \
     storage_save_float_msg_t data = {0}; \
-    data.key_hash = crc16(k); \
-    data.value = (v); \
-    data.priority = (p); \
-    data.sender_id = (s); \
+    data.storage_key = (key); \
+    data.value = (val); \
     (msg)->len = sizeof(storage_save_float_msg_t); \
     memcpy((msg)->buf, &data, sizeof(storage_save_float_msg_t)); \
 } while(0)
 
-#define MSG_PACK_STORAGE_LOAD_FLOAT(msg, k, d, s, r) do { \
+#define MSG_PACK_STORAGE_LOAD_FLOAT(msg, key, def_val) do { \
     storage_load_float_msg_t data = {0}; \
-    data.key_hash = crc16(k); \
-    data.default_value = (d); \
-    data.sender_id = (s); \
-    data.request_id = (r); \
+    data.storage_key = (key); \
+    data.default_value = (def_val); \
     (msg)->len = sizeof(storage_load_float_msg_t); \
     memcpy((msg)->buf, &data, sizeof(storage_load_float_msg_t)); \
 } while(0)
@@ -329,5 +407,40 @@ inline uint16_t crc16(const char* data) {
 
 // Message handler function pointer type
 typedef void (*MessageHandler)(const CANMessage* msg);
+
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
+// Check if a CAN ID is extended (29-bit) - all our IDs are extended now
+inline bool is_extended_can_id(uint32_t can_id) {
+    return (can_id & 0xFFFF0000) != 0;
+}
+
+// Create an extended CAN message (all messages are extended now)
+inline void create_extended_can_message(CANMessage* msg, uint32_t extended_id, 
+                                      const void* data, uint8_t length) {
+    msg->id = extended_id;
+    msg->len = length;
+    if (data && length > 0) {
+        memcpy(msg->buf, data, length);
+    }
+    #ifdef ARDUINO
+    msg->timestamp = micros();
+    msg->flags.extended = 1;
+    msg->flags.remote = 0;
+    #else
+    msg->timestamp = 0;
+    msg->flags.extended = 1;
+    msg->flags.remote = 0;
+    #endif
+}
+
+// Backwards compatibility - all messages are extended now
+inline void create_standard_can_message(CANMessage* msg, uint32_t standard_id, 
+                                       const void* data, uint8_t length) {
+    // Convert to extended format for consistency
+    create_extended_can_message(msg, standard_id, data, length);
+}
 
 #endif

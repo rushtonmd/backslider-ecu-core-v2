@@ -57,6 +57,7 @@ static float captured_park_switch = 0.0f;
 static bool park_switch_message_received = false;
 static float captured_paddle_upshift = 0.0f;
 static bool paddle_upshift_message_received = false;
+static int park_switch_message_call_count = 0;
 
 void capture_solenoid_a(const CANMessage* msg) {
     captured_solenoid_a = MSG_UNPACK_FLOAT(msg);
@@ -84,6 +85,7 @@ void capture_lockup_solenoid(const CANMessage* msg) {
 }
 
 void capture_park_switch_message(const CANMessage* msg) {
+    park_switch_message_call_count++;
     captured_park_switch = MSG_UNPACK_FLOAT(msg);
     park_switch_message_received = true;
 }
@@ -128,6 +130,7 @@ void test_setup() {
     park_switch_message_received = false;
     captured_paddle_upshift = 0.0f;
     paddle_upshift_message_received = false;
+    park_switch_message_call_count = 0;
     
     // Reset time
     mock_set_millis(0);
@@ -244,9 +247,6 @@ TEST(gear_position_detection) {
     // Test Park
     set_gear_position("P");
     
-    // Debug: Check the raw digital pin reading
-    std::cout << "DEBUG: PIN_TRANS_PARK raw digital reading = " << digitalRead(PIN_TRANS_PARK) << std::endl;
-    
     // Subscribe to park switch message to debug
     g_message_bus.subscribe(MSG_TRANS_PARK_SWITCH, capture_park_switch_message);
     
@@ -254,13 +254,6 @@ TEST(gear_position_detection) {
     mock_set_micros(100000);  // 100ms - well beyond the 50ms update interval
     
     update_system();
-    
-    // Debug output
-    std::cout << "DEBUG: Park - current_gear = " << (int)state->current_gear 
-              << ", valid_gear_position = " << state->valid_gear_position 
-              << ", park_switch = " << state->park_switch << std::endl;
-    std::cout << "DEBUG: Park switch message received = " << park_switch_message_received 
-              << ", captured_park_switch = " << captured_park_switch << std::endl;
     
     assert(state->current_gear == GEAR_PARK);
     assert(state->valid_gear_position == true);

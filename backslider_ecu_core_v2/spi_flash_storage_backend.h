@@ -1,184 +1,135 @@
 // spi_flash_storage_backend.h
-// SPI Flash storage backend using Adafruit W25Q128 + FAT32
+// SPI Flash storage backend using Extended CAN ID Architecture
 
 #ifndef SPI_FLASH_STORAGE_BACKEND_H
 #define SPI_FLASH_STORAGE_BACKEND_H
 
 #include "storage_backend.h"
+#include <stdint.h>
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include <algorithm>
 
-#if defined(ARDUINO) && !defined(TESTING)
-    #include <SPI.h>
-    #include "SdFat_Adafruit_Fork.h"
-    #include "Adafruit_SPIFlash.h"
-#endif
-
-#ifdef TESTING
-    // Mock implementations for testing
-    #include <map>
-    #include <vector>
-    #include <iostream>
-    
-    class MockFatVolume {
-    private:
-        static std::map<std::string, std::vector<uint8_t>> mock_files;
-        
-    public:
-        bool begin(void* flash) { return true; }
-        
-        class MockFile {
-        private:
-            std::string filename;
-            size_t read_pos;
-            bool valid;
-            
-        public:
-            MockFile(const std::string& name = "", int file_mode = 0) 
-                : filename(name), read_pos(0), valid(!name.empty()) {}
-                
-            bool open(const char* filename, int mode = 0) { return true; }
-            
-            size_t write(const void* data, size_t size) {
-                if (!valid) return 0;
-                
-                const uint8_t* byte_data = static_cast<const uint8_t*>(data);
-                
-                // Append data to file (correct behavior for sequential writes)
-                std::vector<uint8_t>& file_data = mock_files[filename];
-                size_t old_size = file_data.size();
-                file_data.insert(file_data.end(), byte_data, byte_data + size);
-                
-                // Debug output removed for clean test runs
-                
-                return size;
-            }
-            
-            size_t read(void* data, size_t size) {
-                if (!valid || mock_files.find(filename) == mock_files.end()) {
-                    return 0;
-                }
-                
-                std::vector<uint8_t>& file_data = mock_files[filename];
-                size_t bytes_to_read = std::min(size, file_data.size() - read_pos);
-                
-                #ifndef ARDUINO
-                std::cout << "MockFile::read: filename=" << filename << ", size=" << size 
-                          << ", read_pos=" << read_pos << ", file_size=" << file_data.size() 
-                          << ", bytes_to_read=" << bytes_to_read << std::endl;
-                #endif
-                
-                if (bytes_to_read > 0) {
-                    memcpy(data, &file_data[read_pos], bytes_to_read);
-                    read_pos += bytes_to_read;
-                }
-                
-                return bytes_to_read;
-            }
-            
-            size_t size() {
-                if (!valid || mock_files.find(filename) == mock_files.end()) {
-                    return 0;
-                }
-                return mock_files[filename].size();
-            }
-            
-            void close() { read_pos = 0; }
-            bool available() { return false; }
-            operator bool() { return valid; }
-        };
-        
-        MockFile open(const char* filename, int mode = 0) { 
-            return MockFile(std::string(filename), mode); 
-        }
-        
-        bool exists(const char* filename) { 
-            return mock_files.find(std::string(filename)) != mock_files.end(); 
-        }
-        
-        bool remove(const char* filename) { 
-            mock_files.erase(std::string(filename)); 
-            return true; 
-        }
-        
-        bool format(void* flash) { 
-            mock_files.clear(); 
-            return true; 
-        }
-    };
-    
-    class MockSPIFlash {
-    public:
-        bool begin() { return true; }
-        size_t size() { return 16 * 1024 * 1024; }  // 16MB for testing
-    };
-    
-    #define FatVolume MockFatVolume
-    #define File32 MockFatVolume::MockFile
-    #define Adafruit_SPIFlash MockSPIFlash
-    #define FILE_WRITE 1
-    #define FILE_READ 0
-#endif
+// =============================================================================
+// SPI Flash Storage Backend
+// =============================================================================
 
 class SPIFlashStorageBackend : public StorageBackend {
-private:
-    #if defined(ARDUINO) && !defined(TESTING)
-    // Flash hardware and filesystem
-    Adafruit_SPIFlash* flash;
-    FatVolume fatfs;
-    
-    // Configuration
-    static const int CHIP_SELECT_PIN = 10;  // CS pin for SPI flash
-    static const uint32_t SPI_SPEED = 25000000;  // 25MHz SPI speed
-    #else
-    // Mock objects for testing
-    MockSPIFlash* flash;
-    MockFatVolume fatfs;
-    #endif
-    
-    // Statistics
-    uint32_t write_count;
-    uint32_t read_count;
-    uint32_t format_count;
-    
-    // Helper methods
-    void keyHashToFilename(uint16_t key_hash, char* filename, size_t max_len);
-    bool ensureDirectoryExists(const char* path);
-    bool formatFilesystem();
-    
 public:
     SPIFlashStorageBackend();
     virtual ~SPIFlashStorageBackend();
     
-    // StorageBackend interface
+    // StorageBackend interface implementation
     bool begin() override;
-    bool writeData(uint16_t key_hash, const void* data, size_t size) override;
-    bool readData(uint16_t key_hash, void* data, size_t size) override;
-    bool deleteKey(uint16_t key_hash) override;
-    bool keyExists(uint16_t key_hash) override;
+    bool end() override;
     
-    // Storage information
-    size_t getFreeSpace() override;
-    size_t getTotalSpace() override;
-    uint32_t getWriteCount() override { return write_count; }
-    uint32_t getReadCount() override { return read_count; }
+    // Data access using extended CAN ID as key
+    bool readData(uint32_t storage_key, void* data, size_t dataSize) override;
+    bool writeData(uint32_t storage_key, const void* data, size_t dataSize) override;
+    bool deleteData(uint32_t storage_key) override;
+    bool hasData(uint32_t storage_key) override;
+    
+    // Storage management
+    uint32_t getTotalSpace() override;
+    uint32_t getFreeSpace() override;
+    uint32_t getUsedSpace() override;
+    
+    // Maintenance
+    void sync() override;
+    void flush() override;
+    
+    // Optional iteration support
+    uint32_t getStoredKeyCount() override;
+    bool getStoredKey(uint32_t index, uint32_t* storage_key) override;
+    
+    // Debug/information
+    void printDebugInfo() override;
     
     // SPI Flash specific methods
-    bool formatStorage();
     void printStorageInfo();
     bool verifyIntegrity();
+    void formatStorage();
     
-    // Directory organization
-    bool createDirectory(const char* path);
-    bool listDirectory(const char* path, void (*callback)(const char* filename, size_t size));
+private:
+    // Constants
+    static const uint32_t FLASH_SIZE = 16 * 1024 * 1024;  // 16MB flash
+    static const uint32_t SECTOR_SIZE = 4096;              // 4KB sectors
+    static const uint32_t CACHE_SIZE = 256 * 1024;         // 256KB cache
     
-    // Bulk operations
-    bool saveStructuredData(const char* key, const void* data, size_t size, const char* extension = ".bin");
-    bool loadStructuredData(const char* key, void* data, size_t size, const char* extension = ".bin");
+    // Mock file system for testing
+    class MockFile {
+    public:
+        std::vector<uint8_t> data;
+        size_t position;
+        bool is_open;
+        
+        MockFile() : position(0), is_open(false) {}
+        
+        bool open(const char* path, const char* mode) {
+            is_open = true;
+            position = 0;
+            if (strchr(mode, 'w') || strchr(mode, 'a')) {
+                // Write mode - clear data if 'w', keep if 'a'
+                if (strchr(mode, 'w')) {
+                    data.clear();
+                }
+            }
+            return true;
+        }
+        
+        void close() {
+            is_open = false;
+        }
+        
+        size_t read(void* buffer, size_t size) {
+            if (!is_open || position >= data.size()) return 0;
+            
+            size_t bytes_to_read = std::min(size, data.size() - position);
+            memcpy(buffer, data.data() + position, bytes_to_read);
+            position += bytes_to_read;
+            return bytes_to_read;
+        }
+        
+        size_t write(const void* buffer, size_t size) {
+            if (!is_open) return 0;
+            
+            // Extend data if needed
+            if (position + size > data.size()) {
+                data.resize(position + size);
+            }
+            
+            const uint8_t* src = static_cast<const uint8_t*>(buffer);
+            std::copy(src, src + size, data.begin() + position);
+            position += size;
+            return size;
+        }
+        
+        size_t size() const {
+            return data.size();
+        }
+        
+        bool exists() const {
+            return !data.empty();
+        }
+    };
     
-    // Configuration-specific helpers
-    bool saveJSON(const char* key, const char* json_data);
-    bool loadJSON(const char* key, char* json_data, size_t max_size);
-    bool saveFloatArray(const char* key, const float* values, size_t count);
-    bool loadFloatArray(const char* key, float* values, size_t count);
+    // Mock file system
+    std::unordered_map<std::string, MockFile> mock_files;
+    
+    // Statistics
+    uint32_t total_reads;
+    uint32_t total_writes;
+    uint32_t cache_hits;
+    uint32_t cache_misses;
+    
+    // Helper methods
+    std::string getFilePath(uint32_t storage_key);
+    bool ensureDirectoryExists(const std::string& path);
+    MockFile* openFile(const std::string& path, const char* mode);
+    
+    // Debug helpers
+    void printExtendedCanId(uint32_t storage_key);
 };
 
-#endif // SPI_FLASH_STORAGE_BACKEND_H 
+#endif 

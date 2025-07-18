@@ -1,5 +1,5 @@
 // storage_manager.cpp
-// Implementation of message-driven storage manager
+// Implementation of message-driven storage manager - Extended CAN ID Architecture
 
 #ifndef ARDUINO
 #include "../tests/mock_arduino.h"
@@ -9,7 +9,7 @@ extern MockSerial Serial;
 #include "storage_manager.h"
 #include "spi_flash_storage_backend.h"
 #include "msg_bus.h"
-#include "msg_definitions.h"  // For CRC16 function
+#include "msg_definitions.h"
 
 #ifdef ARDUINO
 #include <Arduino.h>
@@ -29,7 +29,7 @@ StorageManager::StorageManager(StorageBackend* storage_backend)
     
     // Initialize cache
     for (int i = 0; i < CACHE_SIZE; i++) {
-        cache[i].key_hash = 0;
+        cache[i].storage_key = 0;
         cache[i].value = 0.0f;
         cache[i].timestamp = 0;
         cache[i].dirty = false;
@@ -42,12 +42,11 @@ bool StorageManager::init() {
         return false;
     }
     
-    // Subscribe to storage messages
-    // Note: Message handlers will be called statically, so we need global access
+    // Subscribe to storage messages (using new extended CAN IDs)
     g_storage_manager_instance = this;
-    g_message_bus.subscribe(MSG_STORAGE_SAVE_FLOAT, storage_save_float_handler);
-    g_message_bus.subscribe(MSG_STORAGE_LOAD_FLOAT, storage_load_float_handler);
-    g_message_bus.subscribe(MSG_STORAGE_COMMIT_CACHE, storage_commit_cache_handler);
+    g_message_bus.subscribe(MSG_STORAGE_SAVE, storage_save_float_handler);
+    g_message_bus.subscribe(MSG_STORAGE_LOAD, storage_load_float_handler);
+    g_message_bus.subscribe(MSG_STORAGE_COMMIT, storage_commit_cache_handler);
     g_message_bus.subscribe(MSG_STORAGE_STATS, storage_stats_handler);
     
     return true;
@@ -77,21 +76,19 @@ void StorageManager::handle_save_float_message(const CANMessage* msg) {
     bool success = false;
     
     // Save to cache
-    if (save_to_cache(save_msg->key_hash, save_msg->value)) {
+    if (save_to_cache(save_msg->storage_key, save_msg->value)) {
         success = true;
         
-        // Immediate write to backend if high priority
-        if (save_msg->priority == 1) {
-            if (backend->writeData(save_msg->key_hash, &save_msg->value, sizeof(float))) {
-                disk_writes++;
-            } else {
-                success = false;
-            }
+        // Always write to backend immediately (no priority field anymore)
+        if (backend->writeData(save_msg->storage_key, &save_msg->value, sizeof(float))) {
+            disk_writes++;
+        } else {
+            success = false;
         }
     }
     
     // Send response
-    send_save_response(save_msg->key_hash, success, save_msg->sender_id);
+    send_save_response(save_msg->storage_key, success);
 }
 
 void StorageManager::handle_load_float_message(const CANMessage* msg) {
@@ -105,18 +102,18 @@ void StorageManager::handle_load_float_message(const CANMessage* msg) {
     bool success = false;
     
     // Check cache first
-    if (load_from_cache(load_msg->key_hash, &value)) {
+    if (load_from_cache(load_msg->storage_key, &value)) {
         success = true;
         cache_hits++;
     } else {
         // Load from backend
-        if (backend->readData(load_msg->key_hash, &value, sizeof(float))) {
+        if (backend->readData(load_msg->storage_key, &value, sizeof(float))) {
             success = true;
             cache_misses++;
             disk_reads++;
             
             // Add to cache for future access
-            add_to_cache(load_msg->key_hash, value);
+            add_to_cache(load_msg->storage_key, value);
         } else {
             cache_misses++;
             // Keep default value if key not found
@@ -124,7 +121,7 @@ void StorageManager::handle_load_float_message(const CANMessage* msg) {
     }
     
     // Send response
-    send_load_response(load_msg->key_hash, value, success, load_msg->sender_id, load_msg->request_id);
+    send_load_response(load_msg->storage_key, value, success);
 }
 
 void StorageManager::handle_commit_cache_message(const CANMessage* msg) {
@@ -139,11 +136,11 @@ void StorageManager::handle_stats_request_message(const CANMessage* msg) {
 // Cache Management
 // =============================================================================
 
-bool StorageManager::save_to_cache(uint16_t key_hash, float value) {
-    if (key_hash == 0) return false;
+bool StorageManager::save_to_cache(uint32_t storage_key, float value) {
+    if (storage_key == 0) return false;
     
     // Check if key already exists in cache
-    int existing_index = find_cache_entry(key_hash);
+    int existing_index = find_cache_entry(storage_key);
     if (existing_index >= 0) {
         // Update existing entry
         cache[existing_index].value = value;
@@ -154,16 +151,16 @@ bool StorageManager::save_to_cache(uint16_t key_hash, float value) {
     }
     
     // Add new entry
-    add_to_cache(key_hash, value);
+    add_to_cache(storage_key, value);
     cache[cache_index].dirty = true;
     
     return true;
 }
 
-bool StorageManager::load_from_cache(uint16_t key_hash, float* value) {
-    if (key_hash == 0 || !value) return false;
+bool StorageManager::load_from_cache(uint32_t storage_key, float* value) {
+    if (storage_key == 0 || !value) return false;
     
-    int index = find_cache_entry(key_hash);
+    int index = find_cache_entry(storage_key);
     if (index >= 0) {
         *value = cache[index].value;
         cache[index].timestamp = millis();
@@ -174,31 +171,31 @@ bool StorageManager::load_from_cache(uint16_t key_hash, float* value) {
     return false;
 }
 
-void StorageManager::add_to_cache(uint16_t key_hash, float value) {
-    if (key_hash == 0) return;
+void StorageManager::add_to_cache(uint32_t storage_key, float value) {
+    if (storage_key == 0) return;
     
     // Find oldest entry to replace
     int oldest_index = find_oldest_cache_entry();
     
     // Clear the entry
-    cache[oldest_index].key_hash = 0;
+    cache[oldest_index].storage_key = 0;
     cache[oldest_index].value = 0.0f;
     cache[oldest_index].timestamp = millis();
     cache[oldest_index].dirty = false;
     cache[oldest_index].access_count = 1;
     
     // Add new data
-    cache[oldest_index].key_hash = key_hash;
+    cache[oldest_index].storage_key = storage_key;
     cache[oldest_index].value = value;
     
     cache_index = oldest_index;
 }
 
-int StorageManager::find_cache_entry(uint16_t key_hash) {
-    if (key_hash == 0) return -1;
+int StorageManager::find_cache_entry(uint32_t storage_key) {
+    if (storage_key == 0) return -1;
     
     for (int i = 0; i < CACHE_SIZE; i++) {
-        if (cache[i].key_hash != 0 && cache[i].key_hash == key_hash) {
+        if (cache[i].storage_key != 0 && cache[i].storage_key == storage_key) {
             return i;
         }
     }
@@ -211,7 +208,7 @@ int StorageManager::find_oldest_cache_entry() {
     uint32_t oldest_time = cache[0].timestamp;
     
     for (int i = 1; i < CACHE_SIZE; i++) {
-        if (cache[i].key_hash == 0) {
+        if (cache[i].storage_key == 0) {
             // Empty slot - use this
             return i;
         }
@@ -227,8 +224,8 @@ int StorageManager::find_oldest_cache_entry() {
 
 void StorageManager::commit_dirty_entries() {
     for (int i = 0; i < CACHE_SIZE; i++) {
-        if (cache[i].dirty && cache[i].key_hash != 0) {
-            if (backend->writeData(cache[i].key_hash, &cache[i].value, sizeof(float))) {
+        if (cache[i].dirty && cache[i].storage_key != 0) {
+            if (backend->writeData(cache[i].storage_key, &cache[i].value, sizeof(float))) {
                 cache[i].dirty = false;
                 disk_writes++;
             }
@@ -240,30 +237,32 @@ void StorageManager::commit_dirty_entries() {
 // Response Helpers
 // =============================================================================
 
-void StorageManager::send_save_response(uint16_t key_hash, bool success, uint8_t sender_id) {
+void StorageManager::send_save_response(uint32_t storage_key, bool success) {
     storage_save_response_msg_t response;
-    response.key_hash = key_hash;
+    response.storage_key = storage_key;
     response.success = success ? 1 : 0;
-    response.sender_id = sender_id;
+    response.reserved[0] = 0;
+    response.reserved[1] = 0;
+    response.reserved[2] = 0;
     
     g_message_bus.publish(MSG_STORAGE_SAVE_RESPONSE, &response, sizeof(response));
 }
 
-void StorageManager::send_load_response(uint16_t key_hash, float value, bool success, uint8_t sender_id, uint8_t request_id) {
+void StorageManager::send_load_response(uint32_t storage_key, float value, bool success) {
     storage_load_response_msg_t response;
-    response.key_hash = key_hash;
+    response.storage_key = storage_key;
     response.value = value;
-    response.success = success ? 1 : 0;
-    response.request_id = request_id;
     
     g_message_bus.publish(MSG_STORAGE_LOAD_RESPONSE, &response, sizeof(response));
 }
 
-void StorageManager::send_error_response(uint16_t key_hash, uint8_t error_code, uint8_t sender_id) {
+void StorageManager::send_error_response(uint32_t storage_key, uint8_t error_code) {
     storage_error_msg_t response;
-    response.key_hash = key_hash;
+    response.storage_key = storage_key;
     response.error_code = error_code;
-    response.sender_id = sender_id;
+    response.reserved[0] = 0;
+    response.reserved[1] = 0;
+    response.reserved[2] = 0;
     
     g_message_bus.publish(MSG_STORAGE_ERROR, &response, sizeof(response));
 }
@@ -278,7 +277,7 @@ void StorageManager::send_stats_response() {
     // Count current cache entries
     uint16_t cache_count = 0;
     for (int i = 0; i < CACHE_SIZE; i++) {
-        if (cache[i].key_hash != 0) {
+        if (cache[i].storage_key != 0) {
             cache_count++;
         }
     }
@@ -289,21 +288,23 @@ void StorageManager::send_stats_response() {
 }
 
 // =============================================================================
-// Direct Access Methods
+// Direct Access Methods (Updated to use Extended CAN IDs)
 // =============================================================================
 
 bool StorageManager::save_float(const char* key, float value) {
     if (!key) return false;
     
-    uint16_t key_hash = crc16(key);
+    // Convert string key to extended CAN ID
+    // For now, we'll use a simple hash mapping - in the future this could be more sophisticated
+    uint32_t storage_key = convert_string_to_extended_can_id(key);
     
     // Save to cache
-    if (!save_to_cache(key_hash, value)) {
+    if (!save_to_cache(storage_key, value)) {
         return false;
     }
     
     // Write to backend immediately
-    if (backend->writeData(key_hash, &value, sizeof(float))) {
+    if (backend->writeData(storage_key, &value, sizeof(float))) {
         disk_writes++;
         return true;
     }
@@ -314,23 +315,24 @@ bool StorageManager::save_float(const char* key, float value) {
 bool StorageManager::load_float(const char* key, float* value, float default_value) {
     if (!key || !value) return false;
     
-    uint16_t key_hash = crc16(key);
+    // Convert string key to extended CAN ID
+    uint32_t storage_key = convert_string_to_extended_can_id(key);
     
     *value = default_value;
     
     // Check cache first
-    if (load_from_cache(key_hash, value)) {
+    if (load_from_cache(storage_key, value)) {
         cache_hits++;
         return true;
     }
     
     // Load from backend
-    if (backend->readData(key_hash, value, sizeof(float))) {
+    if (backend->readData(storage_key, value, sizeof(float))) {
         cache_misses++;
         disk_reads++;
         
         // Add to cache for future access
-        add_to_cache(key_hash, *value);
+        add_to_cache(storage_key, *value);
         return true;
     }
     
@@ -341,10 +343,11 @@ bool StorageManager::load_float(const char* key, float* value, float default_val
 bool StorageManager::save_data(const char* key, const void* data, size_t size) {
     if (!key || !data || size == 0) return false;
     
-    uint16_t key_hash = crc16(key);
+    // Convert string key to extended CAN ID
+    uint32_t storage_key = convert_string_to_extended_can_id(key);
     
     // Write to backend immediately
-    if (backend->writeData(key_hash, data, size)) {
+    if (backend->writeData(storage_key, data, size)) {
         disk_writes++;
         return true;
     }
@@ -355,15 +358,105 @@ bool StorageManager::save_data(const char* key, const void* data, size_t size) {
 bool StorageManager::load_data(const char* key, void* data, size_t size) {
     if (!key || !data || size == 0) return false;
     
-    uint16_t key_hash = crc16(key);
+    // Convert string key to extended CAN ID
+    uint32_t storage_key = convert_string_to_extended_can_id(key);
     
     // Load from backend
-    if (backend->readData(key_hash, data, size)) {
+    if (backend->readData(storage_key, data, size)) {
         disk_reads++;
         return true;
     }
     
     return false;
+}
+
+// =============================================================================
+// Extended CAN ID Direct Access Methods
+// =============================================================================
+
+bool StorageManager::save_float(uint32_t storage_key, float value) {
+    if (storage_key == 0) return false;
+    
+    // Save to cache
+    if (!save_to_cache(storage_key, value)) {
+        return false;
+    }
+    
+    // Write to backend immediately
+    if (backend->writeData(storage_key, &value, sizeof(float))) {
+        disk_writes++;
+        return true;
+    }
+    
+    return false;
+}
+
+bool StorageManager::load_float(uint32_t storage_key, float* value, float default_value) {
+    if (storage_key == 0 || !value) return false;
+    
+    *value = default_value;
+    
+    // Check cache first
+    if (load_from_cache(storage_key, value)) {
+        cache_hits++;
+        return true;
+    }
+    
+    // Load from backend
+    if (backend->readData(storage_key, value, sizeof(float))) {
+        cache_misses++;
+        disk_reads++;
+        
+        // Add to cache for future access
+        add_to_cache(storage_key, *value);
+        return true;
+    }
+    
+    cache_misses++;
+    return false;
+}
+
+bool StorageManager::save_data(uint32_t storage_key, const void* data, size_t size) {
+    if (storage_key == 0 || !data || size == 0) return false;
+    
+    // Write to backend immediately
+    if (backend->writeData(storage_key, data, size)) {
+        disk_writes++;
+        return true;
+    }
+    
+    return false;
+}
+
+bool StorageManager::load_data(uint32_t storage_key, void* data, size_t size) {
+    if (storage_key == 0 || !data || size == 0) return false;
+    
+    // Load from backend
+    if (backend->readData(storage_key, data, size)) {
+        disk_reads++;
+        return true;
+    }
+    
+    return false;
+}
+
+// =============================================================================
+// Extended CAN ID Conversion
+// =============================================================================
+
+uint32_t StorageManager::convert_string_to_extended_can_id(const char* key) {
+    if (!key) return 0;
+    
+    // For now, use a simple hash to convert string to CAN ID
+    // In a production system, this would be more sophisticated mapping
+    uint32_t hash = 0;
+    while (*key) {
+        hash = hash * 31 + *key;
+        key++;
+    }
+    
+    // Map to configuration subsystem parameter space
+    return MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_CONFIG, hash & PARAMETER_MASK);
 }
 
 // =============================================================================
@@ -379,12 +472,15 @@ void StorageManager::print_cache_info() {
     
     Serial.println("\nCached Keys:");
     for (int i = 0; i < CACHE_SIZE; i++) {
-        if (cache[i].key_hash != 0) {
-            Serial.print("  Hash: 0x"); Serial.print(cache[i].key_hash, HEX);
+        if (cache[i].storage_key != 0) {
+            Serial.print("  Key: 0x"); Serial.print(cache[i].storage_key, HEX);
             Serial.print(" = "); Serial.print(cache[i].value);
             Serial.print(" (access: "); Serial.print(cache[i].access_count);
             Serial.print(", dirty: "); Serial.print(cache[i].dirty ? "Y" : "N");
-            Serial.println(")");
+            Serial.print(") [ECU=0x"); Serial.print(GET_ECU_BASE(cache[i].storage_key) >> 28, HEX);
+            Serial.print(" SUB=0x"); Serial.print(GET_SUBSYSTEM(cache[i].storage_key) >> 20, HEX);
+            Serial.print(" PARAM=0x"); Serial.print(GET_PARAMETER(cache[i].storage_key), HEX);
+            Serial.println("]");
         }
     }
     Serial.println("=================================");
