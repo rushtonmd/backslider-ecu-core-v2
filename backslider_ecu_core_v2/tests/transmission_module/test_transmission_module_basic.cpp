@@ -20,7 +20,7 @@
 #include "../mock_arduino.h"
 
 // Define the Serial mock object
-MockSerial Serial;
+// MockSerial Serial is defined in mock_arduino.cpp
 
 // Include message bus, input manager, and transmission module for testing
 #include "../../msg_definitions.h"

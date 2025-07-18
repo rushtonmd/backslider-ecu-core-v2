@@ -17,7 +17,7 @@
 extern uint32_t mock_millis_time;
 
 // Mock Serial for desktop testing
-MockSerial Serial;
+// MockSerial Serial is defined in mock_arduino.cpp
 
 // Test storage manager
 StorageManager* test_storage_manager = nullptr;

@@ -18,6 +18,7 @@ extern MockSerial Serial1; // Additional serial port for external communications
 #include "external_canbus.h"
 #include "sensor_calibration.h"
 #include "transmission_module.h"
+#include "ecu_config.h"
 // #include "engine_sensors.h"  // TODO: Create engine_sensors.h when ready
 // #include "transmission_sensors.h"  // TODO: Create transmission_sensors.h when ready
 
@@ -100,19 +101,18 @@ void MainApplication::init() {
     // Initialize external communications
     Serial.println("Initializing external communications...");
     
-    // External serial for Arduino-to-Arduino communication
-    #ifdef ARDUINO
-    #if defined(SERIAL_PORT_HARDWARE1) || defined(HAVE_HWSERIAL1)
-    g_external_serial.init(1, &Serial1, 115200);  // Device ID 1, using Serial1 port
-    Serial.println("External serial communication initialized");
-    #else
-    Serial.println("External serial communication (Serial1 not available)");
-    #endif
-    #else
-    // In testing environment, we skip external serial initialization due to type mismatch
-    // MockSerial* cannot be passed to HardwareSerial* parameter
-    Serial.println("External serial communication (mock mode - init skipped)");
-    #endif
+    // External serial communication using ECU configuration
+    if (g_external_serial.init(ECU_TRANSMISSION_CONFIG.external_serial)) {
+        Serial.println("External serial communication initialized");
+        Serial.print("  USB: ");
+        Serial.println(ECU_TRANSMISSION_CONFIG.external_serial.usb.enabled ? "enabled" : "disabled");
+        Serial.print("  Serial1: ");
+        Serial.println(ECU_TRANSMISSION_CONFIG.external_serial.serial1.enabled ? "enabled" : "disabled");
+        Serial.print("  Serial2: ");
+        Serial.println(ECU_TRANSMISSION_CONFIG.external_serial.serial2.enabled ? "enabled" : "disabled");
+    } else {
+        Serial.println("External serial communication initialization failed");
+    }
     
     // External CAN bus for OBD-II and custom devices
     external_canbus_config_t canbus_config = {
@@ -175,13 +175,7 @@ void MainApplication::run() {
     transmission_module_update();
     
     // Update external communications (share data with other ECUs and devices)
-    #ifdef ARDUINO
-    #if defined(SERIAL_PORT_HARDWARE1) || defined(HAVE_HWSERIAL1)
     g_external_serial.update();
-    #endif
-    #else
-    // In testing environment, external serial update is skipped (not initialized)
-    #endif
     g_external_canbus.update();
     
     // TODO: Add other module updates here as they're developed

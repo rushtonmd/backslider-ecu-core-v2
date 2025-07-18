@@ -298,17 +298,104 @@ inline uint8_t digitalPinToInterrupt(uint8_t pin) {
     return pin;
 }
 
+
+
+// =============================================================================
+// HARDWARE SERIAL BASE CLASS
+// =============================================================================
+
+// Abstract base class for serial communication
+class HardwareSerial {
+public:
+    virtual ~HardwareSerial() = default;
+    
+    // Core serial interface methods
+    virtual void begin(unsigned long baud) = 0;
+    virtual int available() = 0;
+    virtual int read() = 0;
+    virtual size_t write(uint8_t byte) = 0;
+    virtual size_t write(const uint8_t* buffer, size_t size) = 0;
+    virtual void flush() = 0;
+};
+
 // =============================================================================
 // MOCK SERIAL CLASS
 // =============================================================================
 
-class MockSerial {
+class MockSerial : public HardwareSerial {
+private:
+    std::vector<uint8_t> rx_buffer;
+    std::vector<uint8_t> tx_buffer;
+    size_t rx_index = 0;
+    
 public:
-    void begin(unsigned long baud) {
+    // HardwareSerial interface methods
+    void begin(unsigned long baud) override {
         (void)baud;
-        std::cout << "Mock Serial initialized at " << baud << " baud" << std::endl;
+        // Reset buffers on begin
+        rx_buffer.clear();
+        tx_buffer.clear();
+        rx_index = 0;
     }
     
+    int available() override {
+        return static_cast<int>(rx_buffer.size() - rx_index);
+    }
+    
+    int read() override {
+        if (rx_index < rx_buffer.size()) {
+            return static_cast<int>(rx_buffer[rx_index++]);
+        }
+        return -1;
+    }
+    
+    size_t write(uint8_t byte) override {
+        tx_buffer.push_back(byte);
+        return 1;
+    }
+    
+    size_t write(const uint8_t* buffer, size_t size) override {
+        for (size_t i = 0; i < size; i++) {
+            tx_buffer.push_back(buffer[i]);
+        }
+        return size;
+    }
+    
+    void flush() override {
+        // Nothing to flush in mock implementation
+    }
+    
+    // Test helper methods
+    void add_byte_to_read(uint8_t byte) {
+        rx_buffer.push_back(byte);
+    }
+    
+    void add_data_to_read(const uint8_t* data, size_t size) {
+        for (size_t i = 0; i < size; i++) {
+            rx_buffer.push_back(data[i]);
+        }
+    }
+    
+    std::vector<uint8_t> get_written_data() const {
+        return tx_buffer;
+    }
+    
+    void clear_written_data() {
+        tx_buffer.clear();
+    }
+    
+    void clear_read_data() {
+        rx_buffer.clear();
+        rx_index = 0;
+    }
+    
+    void reset() {
+        rx_buffer.clear();
+        tx_buffer.clear();
+        rx_index = 0;
+    }
+    
+    // Legacy print/println methods for compatibility
     void print(const char* str) {
         std::cout << str;
     }
@@ -461,19 +548,7 @@ inline void mock_reset_all() {
 // HARDWARE SERIAL BASE CLASS
 // =============================================================================
 
-// Abstract base class for serial communication
-class HardwareSerial {
-public:
-    virtual ~HardwareSerial() = default;
-    
-    // Core serial interface methods
-    virtual void begin(unsigned long baud) = 0;
-    virtual int available() = 0;
-    virtual int read() = 0;
-    virtual size_t write(uint8_t byte) = 0;
-    virtual size_t write(const uint8_t* buffer, size_t size) = 0;
-    virtual void flush() = 0;
-};
+
 
 // =============================================================================
 // MOCK WIRE (I2C) IMPLEMENTATION

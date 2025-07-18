@@ -1,9 +1,12 @@
 // storage_backend.cpp
 // Implementation of storage backend interfaces
 
-#ifndef ARDUINO
-#include "../tests/mock_arduino.h"
-extern MockSerial Serial;
+#if defined(ARDUINO) && !defined(TESTING)
+    #include <Arduino.h>
+    #include <EEPROM.h>
+#else
+    #include "../tests/mock_arduino.h"
+    extern MockSerial Serial;
 #endif
 
 #include "storage_backend.h"
@@ -13,6 +16,8 @@ extern MockSerial Serial;
 #include <Arduino.h>
 #include <EEPROM.h>
 #else
+#include "../tests/mock_arduino.h"
+extern MockSerial Serial;
 // Mock EEPROM for testing
 class MockEEPROM {
 private:
@@ -41,6 +46,7 @@ public:
 // EEPROM Storage Backend Implementation
 // =============================================================================
 
+#if defined(ARDUINO) && !defined(TESTING)
 EEPROMStorageBackend::EEPROMStorageBackend() : write_count(0), read_count(0) {
 }
 
@@ -326,4 +332,5 @@ uint8_t EEPROMStorageBackend::calculateChecksum(const KeyEntry* entry) {
 void EEPROMStorageBackend::defragmentStorage() {
     // TODO: Implement defragmentation if needed
     // For now, this is a placeholder
-} 
+}
+#endif // defined(ARDUINO) && !defined(TESTING) 

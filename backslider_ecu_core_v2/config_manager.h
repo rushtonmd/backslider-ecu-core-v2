@@ -41,8 +41,7 @@ public:
     uint8_t getI2CSCLPin() const { return current_config.pins.i2c_scl_pin; }
     uint8_t getCANTXPin() const { return current_config.pins.can_tx_pin; }
     uint8_t getCANRXPin() const { return current_config.pins.can_rx_pin; }
-    uint8_t getSerialTXPin() const { return current_config.pins.ext_serial_tx_pin; }
-    uint8_t getSerialRXPin() const { return current_config.pins.ext_serial_rx_pin; }
+    // External serial pins no longer needed - using hardware serial ports
     uint8_t getStatusLEDPin() const { return current_config.pins.status_led_pin; }
     uint8_t getErrorLEDPin() const { return current_config.pins.error_led_pin; }
     uint8_t getActivityLEDPin() const { return current_config.pins.activity_led_pin; }

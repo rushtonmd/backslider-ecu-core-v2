@@ -1,526 +1,409 @@
-// tests/external_serial/test_external_serial.cpp
-// Comprehensive test suite for the external serial communication system
+// test_external_serial.cpp
+// Tests for simplified point-to-point serial communication
 
-#include <iostream>
 #include <cassert>
-#include <vector>
 #include <cstring>
-
-// Include mock Arduino before any ECU code
+#include <cstdio>
+#include <vector>
+#include <string>
 #include "../mock_arduino.h"
-
-// Define the Serial mock object
-MockSerial Serial;
-
-// Mock HardwareSerial for testing
-class MockHardwareSerial : public HardwareSerial {
-private:
-    std::vector<uint8_t> tx_buffer;
-    std::vector<uint8_t> rx_buffer;
-    size_t rx_position;
-    
-public:
-    MockHardwareSerial() : rx_position(0) {}
-    
-    void begin(unsigned long baud) override {
-        // Mock initialization
-    }
-    
-    int available() override {
-        return static_cast<int>(rx_buffer.size() - rx_position);
-    }
-    
-    int read() override {
-        if (rx_position < rx_buffer.size()) {
-            return static_cast<int>(rx_buffer[rx_position++]);
-        }
-        return -1;
-    }
-    
-    size_t write(uint8_t byte) override {
-        tx_buffer.push_back(byte);
-        return 1;
-    }
-    
-    size_t write(const uint8_t* buffer, size_t size) override {
-        for (size_t i = 0; i < size; i++) {
-            tx_buffer.push_back(buffer[i]);
-        }
-        return size;
-    }
-    
-    void flush() override {
-        // Mock flush
-    }
-    
-    // Test helper methods
-    void inject_rx_data(const uint8_t* data, size_t length) {
-        for (size_t i = 0; i < length; i++) {
-            rx_buffer.push_back(data[i]);
-        }
-    }
-    
-    void inject_rx_byte(uint8_t byte) {
-        rx_buffer.push_back(byte);
-    }
-    
-    std::vector<uint8_t> get_tx_data() const {
-        return tx_buffer;
-    }
-    
-    void clear_tx_buffer() {
-        tx_buffer.clear();
-    }
-    
-    void clear_rx_buffer() {
-        rx_buffer.clear();
-        rx_position = 0;
-    }
-    
-    size_t get_tx_size() const {
-        return tx_buffer.size();
-    }
-};
-
-// Include external serial for testing
-#include "../../msg_definitions.h"
 #include "../../external_serial.h"
+#include "../../msg_bus.h"
+#include "../../msg_definitions.h"
 
-// Simple test framework
-int tests_run = 0;
-int tests_passed = 0;
+// Mock Serial instances are defined in mock_arduino.cpp
 
-#define TEST(name) \
-    void test_##name(); \
-    void run_test_##name() { \
-        std::cout << "  Running test: " #name "... "; \
-        tests_run++; \
-        test_##name(); \
-        tests_passed++; \
-        std::cout << "PASSED" << std::endl; \
-    } \
-    void test_##name()
-
-// Test globals
-static MockHardwareSerial mock_serial;
-static ExternalSerial test_serial;
-
-// Helper function to create a test packet
-serial_packet_t create_test_packet(uint8_t source_id, uint8_t dest_id, uint32_t msg_id, float value) {
-    serial_packet_t packet = {}; // Zero-initialize the entire packet
-    packet.sync_byte = 0xAA;
-    packet.source_id = source_id;
-    packet.dest_id = dest_id;
-    packet.packet_type = PACKET_TYPE_NORMAL;
-    
-    packet.can_msg.id = msg_id;
-    packet.can_msg.len = sizeof(float);
-    memset(packet.can_msg.buf, 0, sizeof(packet.can_msg.buf)); // Clear the entire buffer
-    memcpy(packet.can_msg.buf, &value, sizeof(float));
-    packet.can_msg.timestamp = 12345;
-    
-    // Calculate checksum (simplified for testing)
-    packet.checksum = 0x1234; // Mock checksum
-    
-    return packet;
+// Test setup helpers
+void setup_test_message_bus() {
+    // Initialize message bus for testing
+    extern MessageBus g_message_bus;
+    g_message_bus.init();
 }
 
-// Test basic initialization and configuration
-TEST(initialization_and_configuration) {
-    ExternalSerial serial;
-    
-    // Test initialization
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial, 2000000);
-    
-    // Check device ID
-    assert(serial.get_device_id() == DEVICE_ID_PRIMARY_ECU);
-    
-    // Check initial statistics
-    assert(serial.get_packets_sent() == 0);
-    assert(serial.get_packets_received() == 0);
-    assert(serial.get_checksum_errors() == 0);
-    assert(serial.get_forwarding_rule_count() == 0);
+void reset_mock_serials() {
+    Serial.reset();
+    Serial1.reset();
+    Serial2.reset();
 }
 
-// Test forwarding rule management
-TEST(forwarding_rule_management) {
-    ExternalSerial serial;
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial);
-    
-    // Add forwarding rules
-    bool result = serial.subscribe_for_forwarding(MSG_ENGINE_RPM, DEVICE_ID_SECONDARY_ECU, 50);
-    assert(result == true);
-    assert(serial.get_forwarding_rule_count() == 1);
-    
-    // Add another rule
-    result = serial.subscribe_for_forwarding(MSG_THROTTLE_POSITION, DEVICE_ID_DASHBOARD, 100);
-    assert(result == true);
-    assert(serial.get_forwarding_rule_count() == 2);
-    
-    // Add broadcast rule
-    result = serial.subscribe_for_forwarding(MSG_ENGINE_STATUS, DEVICE_ID_BROADCAST, 1000);
-    assert(result == true);
-    assert(serial.get_forwarding_rule_count() == 3);
-    
-    // Test rule update (same msg_id and dest_id)
-    result = serial.subscribe_for_forwarding(MSG_ENGINE_RPM, DEVICE_ID_SECONDARY_ECU, 25);
-    assert(result == true);
-    assert(serial.get_forwarding_rule_count() == 3); // Should not increase
-    
-    // Clear rules
-    serial.clear_forwarding_rules();
-    assert(serial.get_forwarding_rule_count() == 0);
+// Test data
+CANMessage create_test_message(uint32_t id, uint8_t len, const uint8_t* data) {
+    CANMessage msg;
+    msg.id = id;
+    msg.len = len;
+    memcpy(msg.buf, data, len);
+    msg.timestamp = millis();
+    return msg;
 }
 
-// Test packet creation and validation
-TEST(packet_creation_and_validation) {
-    ExternalSerial serial;
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial);
+// Test message filtering
+void test_message_filtering() {
+    printf("Testing message filtering...\n");
     
-    // Test direct message sending
-    float test_rpm = 6500.0f;
-    bool result = serial.send_message_to_device(MSG_ENGINE_RPM, &test_rpm, sizeof(float), DEVICE_ID_SECONDARY_ECU);
-    assert(result == true);
+    SerialBridge bridge;
+    serial_port_config_t config = {true, 115200, true, true};
     
-    // Check that data was sent
-    assert(mock_serial.get_tx_size() == sizeof(serial_packet_t));
+    // Initialize bridge
+    assert(bridge.init(&Serial, config));
     
-    // Verify packet structure
-    std::vector<uint8_t> tx_data = mock_serial.get_tx_data();
-    serial_packet_t* sent_packet = (serial_packet_t*)tx_data.data();
+    // Test internal ECU messages (ECU base = 0) - should not be processed
+    uint32_t internal_msg_id = 0x00000123;  // ECU base = 0
+    assert(!bridge.should_process_message(internal_msg_id));
     
-    assert(sent_packet->sync_byte == 0xAA);
-    assert(sent_packet->source_id == DEVICE_ID_PRIMARY_ECU);
-    assert(sent_packet->dest_id == DEVICE_ID_SECONDARY_ECU);
-    assert(sent_packet->packet_type == PACKET_TYPE_NORMAL);
-    assert(sent_packet->can_msg.id == MSG_ENGINE_RPM);
-    assert(sent_packet->can_msg.len == sizeof(float));
+    // Test external ECU messages (ECU base > 0) - should be processed
+    uint32_t external_msg_id = 0x10000123;  // ECU base = 1
+    assert(bridge.should_process_message(external_msg_id));
     
-    // Verify data payload
-    float received_rpm = MSG_UNPACK_FLOAT(&sent_packet->can_msg);
-    assert(received_rpm == test_rpm);
+    external_msg_id = 0x20000456;  // ECU base = 2
+    assert(bridge.should_process_message(external_msg_id));
     
-    mock_serial.clear_tx_buffer();
+    printf("✓ Message filtering tests passed\n");
 }
 
-// Test packet parsing state machine
-TEST(packet_parsing_state_machine) {
-    ExternalSerial serial;
-    serial.init(DEVICE_ID_SECONDARY_ECU, &mock_serial);
+// Test serial bridge initialization
+void test_serial_bridge_init() {
+    printf("Testing serial bridge initialization...\n");
     
-    // Create a test packet for this device
-    serial_packet_t test_packet = create_test_packet(DEVICE_ID_PRIMARY_ECU, DEVICE_ID_SECONDARY_ECU, MSG_ENGINE_RPM, 5500.0f);
+    SerialBridge bridge;
     
-    // Inject packet data byte by byte
-    uint8_t* packet_bytes = (uint8_t*)&test_packet;
-    for (size_t i = 0; i < sizeof(serial_packet_t); i++) {
-        mock_serial.inject_rx_byte(packet_bytes[i]);
+    // Test invalid port initialization
+    assert(!bridge.init(nullptr, {true, 115200, true, true}));
+    
+    // Test valid initialization
+    serial_port_config_t config = {true, 115200, true, true};
+    assert(bridge.init(&Serial, config));
+    assert(bridge.is_enabled());
+    
+    // Test disabled initialization
+    config.enabled = false;
+    assert(bridge.init(&Serial, config));
+    assert(!bridge.is_enabled());
+    
+    printf("✓ Serial bridge initialization tests passed\n");
+}
+
+// Test message sending
+void test_message_sending() {
+    printf("Testing message sending...\n");
+    
+    SerialBridge bridge;
+    serial_port_config_t config = {true, 115200, true, true};
+    
+    // Initialize bridge
+    assert(bridge.init(&Serial, config));
+    
+    // Create test message
+    uint8_t test_data[] = {0x01, 0x02, 0x03, 0x04};
+    CANMessage msg = create_test_message(0x123, 4, test_data);
+    
+    // Send message
+    bridge.send_message(msg);
+    
+    // Verify message was sent
+    assert(bridge.get_messages_sent() == 1);
+    
+    // Verify binary data was written to serial
+    std::vector<uint8_t> written_data = Serial.get_written_data();
+    assert(written_data.size() == sizeof(CANMessage));
+    
+    // Verify the data matches our message
+    CANMessage received_msg;
+    memcpy(&received_msg, written_data.data(), sizeof(CANMessage));
+    assert(received_msg.id == msg.id);
+    assert(received_msg.len == msg.len);
+    assert(memcmp(received_msg.buf, msg.buf, msg.len) == 0);
+    
+    printf("✓ Message sending tests passed\n");
+}
+
+// Test message receiving
+void test_message_receiving() {
+    printf("Testing message receiving...\n");
+    
+    setup_test_message_bus();
+    
+    SerialBridge bridge;
+    serial_port_config_t config = {true, 115200, true, true};
+    
+    // Initialize bridge
+    assert(bridge.init(&Serial, config));
+    
+    // Create test message with external ECU ID
+    uint8_t test_data[] = {0x11, 0x22, 0x33, 0x44};
+    CANMessage msg = create_test_message(0x10000123, 4, test_data);  // External ECU message
+    
+    // Simulate serial data reception
+    const uint8_t* msg_bytes = (const uint8_t*)&msg;
+    for (size_t i = 0; i < sizeof(CANMessage); i++) {
+        Serial.add_byte_to_read(msg_bytes[i]);
     }
     
-    // Process the data
-    uint32_t initial_received = serial.get_packets_received();
-    serial.update();
+    // Process incoming data
+    bridge.update();
     
-    // Note: In a real test, we'd need to handle the checksum validation
-    // For now, this tests the parsing state machine structure
+    // Verify message was received
+    assert(bridge.get_messages_received() == 1);
     
-    mock_serial.clear_rx_buffer();
+    printf("✓ Message receiving tests passed\n");
 }
 
-// Test buffer management
-TEST(buffer_management) {
-    ExternalSerial serial;
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial);
+// Test buffer overflow handling
+void test_buffer_overflow() {
+    printf("Testing buffer overflow handling...\n");
     
-    // Test initial buffer state
-    assert(serial.get_rx_buffer_level() == 0);
+    SerialBridge bridge;
+    serial_port_config_t config = {true, 115200, true, true};
     
-    // Inject some data
+    // Initialize bridge
+    assert(bridge.init(&Serial, config));
+    
+    // For this test, just verify the buffer overflow tracking works correctly
+    // Since the current implementation prevents buffer overflows naturally,
+    // we'll test that the implementation handles invalid data correctly
+    
+    // Fill with random data that will cause parse errors
     for (int i = 0; i < 100; i++) {
-        mock_serial.inject_rx_byte(i);
+        Serial.add_byte_to_read(0x55);
     }
     
-    // Process data (this will fill internal buffer)
-    serial.update();
+    // Process data - this should generate parse errors for invalid message format
+    bridge.update();
     
-    // Buffer should have data now (exact amount depends on parsing)
-    // Just verify no overflow occurred initially
-    assert(serial.get_buffer_overflows() == 0);
+    // Should have parse errors from invalid message format
+    assert(bridge.get_parse_errors() > 0);
     
-    mock_serial.clear_rx_buffer();
+    // Verify buffer overflow counter starts at 0
+    assert(bridge.get_buffer_overflows() == 0);
+    
+    printf("✓ Buffer overflow tests passed\n");
 }
 
-// Test device addressing and routing
-TEST(device_addressing_and_routing) {
-    ExternalSerial primary_serial;
-    ExternalSerial secondary_serial;
+// Test external serial initialization
+void test_external_serial_init() {
+    printf("Testing external serial initialization...\n");
     
-    MockHardwareSerial primary_port;
-    MockHardwareSerial secondary_port;
+    reset_mock_serials();
     
-    primary_serial.init(DEVICE_ID_PRIMARY_ECU, &primary_port);
-    secondary_serial.init(DEVICE_ID_SECONDARY_ECU, &secondary_port);
+    ExternalSerial ext_serial;
     
-    // Test message for specific device
-    float test_value = 7200.0f;
-    primary_serial.send_message_to_device(MSG_ENGINE_RPM, &test_value, sizeof(float), DEVICE_ID_SECONDARY_ECU);
+    // Test with default configuration
+    external_serial_config_t config = DEFAULT_EXTERNAL_SERIAL_CONFIG;
+    assert(ext_serial.init(config));
+    assert(ext_serial.is_initialized());
     
-    // Verify packet was sent
-    assert(primary_port.get_tx_size() == sizeof(serial_packet_t));
+    // Test with custom configuration
+    config.usb.enabled = true;
+    config.serial1.enabled = true;
+    config.serial2.enabled = false;
+    assert(ext_serial.init(config));
     
-    // Test broadcast message
-    primary_serial.send_message_to_device(MSG_ENGINE_STATUS, &test_value, sizeof(float), DEVICE_ID_BROADCAST);
+    // Verify bridge states
+    assert(ext_serial.get_usb_bridge().is_enabled());
+    assert(ext_serial.get_serial1_bridge().is_enabled());
+    assert(!ext_serial.get_serial2_bridge().is_enabled());
     
-    // Should have sent two packets now
-    assert(primary_port.get_tx_size() == 2 * sizeof(serial_packet_t));
-    
-    primary_port.clear_tx_buffer();
-    secondary_port.clear_tx_buffer();
+    printf("✓ External serial initialization tests passed\n");
 }
 
-// Test rate limiting functionality
-TEST(rate_limiting) {
-    ExternalSerial serial;
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial);
+// Test port configuration
+void test_port_configuration() {
+    printf("Testing port configuration...\n");
     
-    // Add rule with 100ms rate limit
-    serial.subscribe_for_forwarding(MSG_ENGINE_RPM, DEVICE_ID_SECONDARY_ECU, 100);
+    reset_mock_serials();
     
-    // Send first message - should go through
-    float rpm1 = 3000.0f;
-    bool result1 = serial.send_message_to_device(MSG_ENGINE_RPM, &rpm1, sizeof(float), DEVICE_ID_SECONDARY_ECU);
-    assert(result1 == true);
+    ExternalSerial ext_serial;
+    external_serial_config_t config = DEFAULT_EXTERNAL_SERIAL_CONFIG;
     
-    size_t packets_after_first = mock_serial.get_tx_size() / sizeof(serial_packet_t);
+    // Initialize with default config
+    assert(ext_serial.init(config));
     
-    // Send second message immediately - should be rate limited in forwarding rules
-    // (Note: direct sending bypasses rate limiting, so this tests the rule structure)
-    float rpm2 = 3500.0f;
-    bool result2 = serial.send_message_to_device(MSG_ENGINE_RPM, &rpm2, sizeof(float), DEVICE_ID_SECONDARY_ECU);
-    assert(result2 == true); // Direct send should still work
+    // Test port configuration updates
+    serial_port_config_t new_config = {true, 2000000, true, true};
+    assert(ext_serial.set_port_config(0, new_config));  // USB
     
-    mock_serial.clear_tx_buffer();
+    // Verify configuration was set
+    serial_port_config_t retrieved_config = ext_serial.get_port_config(0);
+    assert(retrieved_config.enabled == new_config.enabled);
+    assert(retrieved_config.baud_rate == new_config.baud_rate);
+    
+    // Test invalid port index
+    assert(!ext_serial.set_port_config(99, new_config));
+    
+    printf("✓ Port configuration tests passed\n");
 }
 
-// Test statistics tracking
-TEST(statistics_tracking) {
-    ExternalSerial serial;
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial);
+// Test message bus integration
+void test_message_bus_integration() {
+    printf("Testing message bus integration...\n");
     
-    // Initial statistics
-    assert(serial.get_packets_sent() == 0);
-    assert(serial.get_packets_received() == 0);
-    assert(serial.get_packets_forwarded() == 0);
-    assert(serial.get_checksum_errors() == 0);
-    assert(serial.get_timeout_errors() == 0);
-    assert(serial.get_buffer_overflows() == 0);
+    setup_test_message_bus();
+    reset_mock_serials();
     
-    // Send some packets
-    float test_value = 4500.0f;
-    serial.send_message_to_device(MSG_ENGINE_RPM, &test_value, sizeof(float), DEVICE_ID_SECONDARY_ECU);
-    serial.send_message_to_device(MSG_THROTTLE_POSITION, &test_value, sizeof(float), DEVICE_ID_DASHBOARD);
+    ExternalSerial ext_serial;
+    external_serial_config_t config = DEFAULT_EXTERNAL_SERIAL_CONFIG;
     
-    // Check sent statistics
-    assert(serial.get_packets_sent() == 2);
+    // Initialize with USB enabled
+    config.usb.enabled = true;
+    config.serial1.enabled = false;
+    config.serial2.enabled = false;
+    assert(ext_serial.init(config));
+    
+    // Create test message
+    uint8_t test_data[] = {0xAA, 0xBB, 0xCC, 0xDD};
+    CANMessage msg = create_test_message(0x456, 4, test_data);
+    
+    // Send message through external serial
+    ext_serial.on_message_bus_message(&msg);
+    
+    // Verify message was sent to USB bridge
+    assert(ext_serial.get_usb_bridge().get_messages_sent() == 1);
+    
+    // Verify no messages sent to other bridges
+    assert(ext_serial.get_serial1_bridge().get_messages_sent() == 0);
+    assert(ext_serial.get_serial2_bridge().get_messages_sent() == 0);
+    
+    printf("✓ Message bus integration tests passed\n");
+}
+
+// Test statistics
+void test_statistics() {
+    printf("Testing statistics...\n");
+    
+    setup_test_message_bus();
+    reset_mock_serials();
+    
+    ExternalSerial ext_serial;
+    external_serial_config_t config = DEFAULT_EXTERNAL_SERIAL_CONFIG;
+    
+    // Initialize with multiple ports
+    config.usb.enabled = true;
+    config.serial1.enabled = true;
+    config.serial2.enabled = false;
+    assert(ext_serial.init(config));
+    
+    // Send messages
+    uint8_t test_data[] = {0x01, 0x02};
+    CANMessage msg1 = create_test_message(0x123, 2, test_data);
+    CANMessage msg2 = create_test_message(0x456, 2, test_data);
+    
+    ext_serial.on_message_bus_message(&msg1);
+    ext_serial.on_message_bus_message(&msg2);
+    
+    // Verify total statistics
+    assert(ext_serial.get_total_messages_sent() == 4);  // 2 messages * 2 enabled ports
     
     // Reset statistics
-    serial.reset_statistics();
-    assert(serial.get_packets_sent() == 0);
+    ext_serial.reset_all_statistics();
+    assert(ext_serial.get_total_messages_sent() == 0);
     
-    mock_serial.clear_tx_buffer();
+    printf("✓ Statistics tests passed\n");
 }
 
-// Test error handling
-TEST(error_handling) {
-    ExternalSerial serial;
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial);
+// Test mixed internal/external message filtering
+void test_mixed_message_filtering() {
+    printf("Testing mixed internal/external message filtering...\n");
     
-    // Test invalid data length
-    uint8_t invalid_data[16]; // Too long for CAN message
-    bool result = serial.send_message_to_device(MSG_ENGINE_RPM, invalid_data, 16, DEVICE_ID_SECONDARY_ECU);
-    assert(result == false);
+    setup_test_message_bus();
+    reset_mock_serials();
     
-    // Test invalid device ID during initialization
-    ExternalSerial invalid_serial;
-    invalid_serial.init(DEVICE_ID_INVALID, &mock_serial);
-    assert(invalid_serial.get_device_id() == DEVICE_ID_INVALID);
+    SerialBridge bridge;
+    serial_port_config_t config = {true, 115200, true, true};
     
-    // Verify no packets sent due to invalid operations
-    assert(mock_serial.get_tx_size() == 0);
-}
-
-// Test ping functionality
-TEST(ping_functionality) {
-    ExternalSerial serial;
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial);
+    // Initialize bridge
+    assert(bridge.init(&Serial, config));
     
-    // Test ping request
-    bool result = serial.ping_device(DEVICE_ID_SECONDARY_ECU);
-    assert(result == true);
+    // Create mix of internal and external messages
+    struct TestMessage {
+        uint32_t id;
+        bool should_process;
+    };
     
-    // Should have sent a ping packet
-    assert(mock_serial.get_tx_size() == sizeof(serial_packet_t));
+    TestMessage test_messages[] = {
+        {0x00000123, false},  // Internal ECU (base = 0)
+        {0x10000123, true},   // External ECU (base = 1)
+        {0x20000456, true},   // External ECU (base = 2)
+        {0x00000789, false},  // Internal ECU (base = 0)
+        {0xF0000ABC, true},   // External ECU (base = 15)
+    };
     
-    // Verify it's a ping packet
-    std::vector<uint8_t> tx_data = mock_serial.get_tx_data();
-    serial_packet_t* sent_packet = (serial_packet_t*)tx_data.data();
-    assert(sent_packet->packet_type == PACKET_TYPE_PING);
-    assert(sent_packet->dest_id == DEVICE_ID_SECONDARY_ECU);
-    
-    mock_serial.clear_tx_buffer();
-}
-
-// Test message filtering and forwarding logic
-TEST(message_filtering_and_forwarding) {
-    ExternalSerial serial;
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial);
-    
-    // Set up forwarding rules
-    serial.subscribe_for_forwarding(MSG_ENGINE_RPM, DEVICE_ID_SECONDARY_ECU);
-    serial.subscribe_for_forwarding(MSG_COOLANT_TEMP, DEVICE_ID_DASHBOARD);
-    
-    // Test that correct messages would be forwarded
-    // (Note: This tests the rule structure - actual forwarding would need message bus integration)
-    
-    // Send a message that has a forwarding rule
-    float rpm = 5000.0f;
-    serial.send_message_to_device(MSG_ENGINE_RPM, &rpm, sizeof(float), DEVICE_ID_SECONDARY_ECU);
-    
-    // Send a message that doesn't have a forwarding rule
-    float voltage = 12.6f;
-    serial.send_message_to_device(MSG_BATTERY_VOLTAGE, &voltage, sizeof(float), DEVICE_ID_SECONDARY_ECU);
-    
-    // Both should be sent (direct sending bypasses filtering)
-    assert(serial.get_packets_sent() == 2);
-    
-    mock_serial.clear_tx_buffer();
-}
-
-// Test checksum calculation
-TEST(checksum_calculation) {
-    ExternalSerial serial;
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial);
-    
-    // Create identical packets
-    serial_packet_t packet1 = create_test_packet(DEVICE_ID_PRIMARY_ECU, DEVICE_ID_SECONDARY_ECU, MSG_ENGINE_RPM, 3000.0f);
-    serial_packet_t packet2 = create_test_packet(DEVICE_ID_PRIMARY_ECU, DEVICE_ID_SECONDARY_ECU, MSG_ENGINE_RPM, 3000.0f);
-    
-    // Remove checksums for testing
-    packet1.checksum = 0;
-    packet2.checksum = 0;
-    
-    // Manually test checksum consistency (would need access to calculate_checksum method)
-    // For now, just verify packet structure is consistent
-    assert(memcmp(&packet1, &packet2, sizeof(serial_packet_t) - sizeof(uint16_t)) == 0);
-}
-
-// Test multiple device chain simulation
-TEST(multiple_device_chain) {
-    // Simulate 3 devices in a chain
-    ExternalSerial device1, device2, device3;
-    MockHardwareSerial port1, port2, port3;
-    
-    device1.init(DEVICE_ID_PRIMARY_ECU, &port1);
-    device2.init(DEVICE_ID_SECONDARY_ECU, &port2);
-    device3.init(DEVICE_ID_DASHBOARD, &port3);
-    
-    // Device 1 sends to Device 3 (should route through Device 2)
-    float test_data = 8500.0f;
-    device1.send_message_to_device(MSG_VEHICLE_SPEED, &test_data, sizeof(float), DEVICE_ID_DASHBOARD);
-    
-    // Verify packet was sent from Device 1
-    assert(port1.get_tx_size() == sizeof(serial_packet_t));
-    
-    // In a real chain, Device 2 would receive and forward this packet
-    // For this test, we just verify the packet structure
-    std::vector<uint8_t> tx_data = port1.get_tx_data();
-    serial_packet_t* packet = (serial_packet_t*)tx_data.data();
-    assert(packet->source_id == DEVICE_ID_PRIMARY_ECU);
-    assert(packet->dest_id == DEVICE_ID_DASHBOARD);
-    
-    port1.clear_tx_buffer();
-    port2.clear_tx_buffer();
-    port3.clear_tx_buffer();
-}
-
-// Test configuration edge cases
-TEST(configuration_edge_cases) {
-    ExternalSerial serial;
-    
-    // Test initialization with null pointer
-    serial.init(DEVICE_ID_PRIMARY_ECU, nullptr);
-    assert(serial.get_device_id() == DEVICE_ID_PRIMARY_ECU); // Should still set ID
-    
-    // Test too many forwarding rules
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial);
-    
-    // Add maximum number of rules
-    for (int i = 0; i < 32; i++) { // MAX_FORWARDING_RULES
-        bool result = serial.subscribe_for_forwarding(0x100 + i, DEVICE_ID_SECONDARY_ECU);
-        assert(result == true);
+    for (const auto& test_msg : test_messages) {
+        uint8_t test_data[] = {0x01, 0x02, 0x03, 0x04};
+        CANMessage msg = create_test_message(test_msg.id, 4, test_data);
+        
+        // Simulate serial data reception
+        const uint8_t* msg_bytes = (const uint8_t*)&msg;
+        for (size_t i = 0; i < sizeof(CANMessage); i++) {
+            Serial.add_byte_to_read(msg_bytes[i]);
+        }
+        
+        // Process message
+        uint32_t initial_count = bridge.get_messages_received();
+        bridge.update();
+        
+        // Check if message was processed as expected
+        if (test_msg.should_process) {
+            assert(bridge.get_messages_received() == initial_count + 1);
+        } else {
+            assert(bridge.get_messages_received() == initial_count);
+        }
     }
     
-    // Try to add one more - should fail
-    bool result = serial.subscribe_for_forwarding(0x200, DEVICE_ID_SECONDARY_ECU);
-    assert(result == false);
+    printf("✓ Mixed message filtering tests passed\n");
 }
 
-// Test data integrity
-TEST(data_integrity) {
-    ExternalSerial serial;
-    serial.init(DEVICE_ID_PRIMARY_ECU, &mock_serial);
+// Test TX/RX enable/disable
+void test_tx_rx_enable_disable() {
+    printf("Testing TX/RX enable/disable...\n");
     
-    // Test various data types
-    float float_val = 123.456f;
-    uint32_t uint32_val = 0x12345678;
-    uint16_t uint16_val = 0xABCD;
-    uint8_t uint8_val = 0x42;
+    setup_test_message_bus();
+    reset_mock_serials();
     
-    // Send different data types
-    serial.send_message_to_device(MSG_ENGINE_RPM, &float_val, sizeof(float), DEVICE_ID_SECONDARY_ECU);
-    serial.send_message_to_device(MSG_SYSTEM_TIME, &uint32_val, sizeof(uint32_t), DEVICE_ID_SECONDARY_ECU);
-    serial.send_message_to_device(MSG_IDLE_TARGET_RPM, &uint16_val, sizeof(uint16_t), DEVICE_ID_SECONDARY_ECU);
-    serial.send_message_to_device(MSG_ENGINE_STATUS, &uint8_val, sizeof(uint8_t), DEVICE_ID_SECONDARY_ECU);
+    SerialBridge bridge;
     
-    // Verify all packets sent
-    assert(serial.get_packets_sent() == 4);
+    // Test TX disabled
+    serial_port_config_t config = {true, 115200, false, true};  // TX disabled
+    assert(bridge.init(&Serial, config));
     
-    // Verify total data sent
-    assert(mock_serial.get_tx_size() == 4 * sizeof(serial_packet_t));
+    uint8_t test_data[] = {0x01, 0x02, 0x03, 0x04};
+    CANMessage msg = create_test_message(0x123, 4, test_data);
     
-    mock_serial.clear_tx_buffer();
+    bridge.send_message(msg);
+    assert(bridge.get_messages_sent() == 0);  // Should not send
+    
+    // Test RX disabled
+    config.tx_enabled = true;
+    config.rx_enabled = false;  // RX disabled
+    assert(bridge.init(&Serial, config));
+    
+    // Add data to serial
+    Serial.add_byte_to_read(0x55);
+    bridge.update();
+    
+    // Should not process incoming data
+    assert(bridge.get_messages_received() == 0);
+    
+    printf("✓ TX/RX enable/disable tests passed\n");
 }
 
-// Main test runner
+// Run all tests
 int main() {
-    std::cout << "=== External Serial Communication Tests ===" << std::endl;
+    printf("Running External Serial Tests...\n");
+    printf("=====================================\n");
     
-    // Run all tests
-    run_test_initialization_and_configuration();
-    run_test_forwarding_rule_management();
-    run_test_packet_creation_and_validation();
-    run_test_packet_parsing_state_machine();
-    run_test_buffer_management();
-    run_test_device_addressing_and_routing();
-    run_test_rate_limiting();
-    run_test_statistics_tracking();
-    run_test_error_handling();
-    run_test_ping_functionality();
-    run_test_message_filtering_and_forwarding();
-    run_test_checksum_calculation();
-    run_test_multiple_device_chain();
-    run_test_configuration_edge_cases();
-    run_test_data_integrity();
+    test_message_filtering();
+    test_serial_bridge_init();
+    test_message_sending();
+    test_message_receiving();
+    test_buffer_overflow();
+    test_external_serial_init();
+    test_port_configuration();
+    test_message_bus_integration();
+    test_statistics();
+    test_mixed_message_filtering();
+    test_tx_rx_enable_disable();
     
-    // Print results
-    std::cout << std::endl;
-    std::cout << "External Serial Tests - Run: " << tests_run << ", Passed: " << tests_passed << std::endl;
+    printf("\n=====================================\n");
+    printf("All External Serial Tests Passed! ✓\n");
     
-    if (tests_passed == tests_run) {
-        std::cout << "✅ ALL EXTERNAL SERIAL TESTS PASSED!" << std::endl;
-        return 0;
-    } else {
-        std::cout << "❌ SOME EXTERNAL SERIAL TESTS FAILED!" << std::endl;
-        return 1;
-    }
+    return 0;
 }

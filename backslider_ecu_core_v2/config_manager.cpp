@@ -168,10 +168,7 @@ void ConfigManager::printConfiguration() {
     Serial.print(current_config.pins.can_tx_pin);
     Serial.print(", RX: ");
     Serial.println(current_config.pins.can_rx_pin);
-    Serial.print("Serial TX: ");
-    Serial.print(current_config.pins.ext_serial_tx_pin);
-    Serial.print(", RX: ");
-    Serial.println(current_config.pins.ext_serial_rx_pin);
+    Serial.println("Serial: Hardware ports (USB, Serial1, Serial2)");
     
     Serial.println("\n--- I2C Configuration ---");
     Serial.print("Bus Frequency: ");
@@ -237,11 +234,7 @@ void ConfigManager::printConfigurationSummary() {
     Serial.print(current_config.pins.can_tx_pin);
     Serial.print("/");
     Serial.print(current_config.pins.can_rx_pin);
-    Serial.print("), Serial(");
-    Serial.print(current_config.pins.ext_serial_tx_pin);
-    Serial.print("/");
-    Serial.print(current_config.pins.ext_serial_rx_pin);
-    Serial.println(")");
+    Serial.print("), Serial(HW)");
     
     Serial.println("=============================\n");
 }

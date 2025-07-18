@@ -2,6 +2,7 @@
 #define ECU_CONFIG_H
 
 #include <stdint.h>
+#include "external_serial.h"
 
 // =============================================================================
 // ECU TYPE DEFINITIONS
@@ -22,12 +23,6 @@ struct CriticalPinConfig {
     // I2C Bus (Wire - primary I2C)
     uint8_t i2c_sda_pin;
     uint8_t i2c_scl_pin;
-    
-    // External Serial
-    uint8_t ext_serial_tx_pin;
-    uint8_t ext_serial_rx_pin;
-    uint8_t ext_serial_rts_pin;
-    uint8_t ext_serial_cts_pin;
     
     // External CAN Bus
     uint8_t can_tx_pin;
@@ -96,6 +91,7 @@ struct ECUConfiguration {
     CriticalPinConfig pins;
     I2CConfiguration i2c;
     SPIConfiguration spi;
+    external_serial_config_t external_serial;
     
     // Boot behavior
     uint32_t boot_timeout_ms;

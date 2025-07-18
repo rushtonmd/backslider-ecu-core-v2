@@ -8,8 +8,7 @@
 #include "../mock_arduino.h"
 
 // Define the Serial mock objects that will be used by both test and main_application
-MockSerial Serial;
-MockSerial Serial1;
+// MockSerial Serial and Serial1 are defined in mock_arduino.cpp
 
 // Include main application and dependencies
 #include "../../main_application.h"

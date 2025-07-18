@@ -19,28 +19,25 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
     
     // TEENSY 4.0 PIN ALLOCATION SUMMARY (24 total pins: 0-23)
     // =====================================================
-    // Used Pins: 0, 1, 2, 3, 10, 11, 12, 13, 18, 19, 22, 23 (12 pins)
+    // Used Pins: 0, 1, 2, 3, 10, 11, 12, 13, 18, 19 (10 pins)
     // 
-    // Available Pins: 4, 5, 6, 7, 8, 9, 14, 15, 16, 17, 20, 21 (12 pins)
+    // Available Pins: 4, 5, 6, 7, 8, 9, 14, 15, 16, 17, 20, 21, 22, 23 (14 pins)
     // 
     // Special Function Pins Available:
     // - Pin 4, 5: General I/O
     // - Pin 6, 7, 8, 9, 14: Built-in QSPI flash pins (available for other use)
+    // - Pin 7, 8: Serial2 TX/RX (if Serial2 enabled in external_serial config)
     // - Pin 15, 16, 17: Analog inputs (A1, A2, A3)
     // - Pin 20, 21: Additional I2C (Wire1) - SDA1, SCL1
+    // - Pin 22, 23: Available for general use (previously external serial)
     //
     // Note: Pin 13 is built-in LED and SPI SCK - choose usage carefully
+    //       Hardware serial ports (Serial1, Serial2) use predefined pins
     
     .pins = {
         // I2C Bus (Wire - primary I2C) - Standard Teensy 4.0 I2C pins
         .i2c_sda_pin = 18,
         .i2c_scl_pin = 19,
-        
-        // External Serial - User specified pins
-        .ext_serial_tx_pin = 22,
-        .ext_serial_rx_pin = 23,
-        // .ext_serial_rts_pin = 4,   // Optional flow control
-        // .ext_serial_cts_pin = 5,   // Optional flow control
         
         // External CAN Bus - User specified pins
         .can_tx_pin = 0,
@@ -131,6 +128,33 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
         //     .bit_order = MSBFIRST,
         //     .enabled = false       // Disabled for now
         // }
+    },
+    
+    // External Serial Communication
+    .external_serial = {
+        // USB Serial - High-speed communication for tuning software
+        .usb = {
+            .enabled = true,
+            .baud_rate = 2000000,  // 2 Mbps for fast parameter access
+            .tx_enabled = true,
+            .rx_enabled = true
+        },
+        
+        // Serial1 - Dashboard communication
+        .serial1 = {
+            .enabled = true,
+            .baud_rate = 1000000,  // 1 Mbps for dashboard data
+            .tx_enabled = true,
+            .rx_enabled = true
+        },
+        
+        // Serial2 - Reserved for future use (datalogger, etc.)
+        .serial2 = {
+            .enabled = false,
+            .baud_rate = 115200,   // Standard rate for general use
+            .tx_enabled = true,
+            .rx_enabled = true
+        }
     },
     
     // Boot behavior

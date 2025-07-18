@@ -2,48 +2,72 @@
 // Implementation of mock Arduino environment for testing
 
 #include "mock_arduino.h"
+#include <iostream>
+#include <cstring>
+#include <vector>
 
 // =============================================================================
-// GLOBAL MOCK VARIABLES
+// GLOBAL VARIABLES
 // =============================================================================
 
-// Timing variables
+// Mock timing variables
 uint32_t mock_millis_time = 0;
 uint32_t mock_micros_time = 0;
 
-// Analog pin mock values (12-bit ADC, 0-4095)
-uint16_t mock_analog_values[42] = {
-    2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048,  // 0-9
-    2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048,  // 10-19
-    2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048,  // 20-29
-    2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048,  // 30-39
-    2048, 2048                                                   // 40-41
-};
+// Mock analog values (12-bit ADC)
+uint16_t mock_analog_values[42] = {0};
 
-// Digital pin mock values (0 = LOW, 1 = HIGH)
-uint8_t mock_digital_values[56] = {
-    HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH,  // 0-9
-    HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH,  // 10-19
-    HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH,  // 20-29
-    HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH,  // 30-39
-    HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH,  // 40-49
-    HIGH, HIGH, HIGH, HIGH, HIGH, HIGH                          // 50-55
-};
+// Mock digital values
+uint8_t mock_digital_values[56] = {0};
 
-// Pin mode mock values (INPUT, OUTPUT, INPUT_PULLUP)
-uint8_t mock_pin_modes[56] = {
-    INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT,  // 0-9
-    INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT,  // 10-19
-    INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT,  // 20-29
-    INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT,  // 30-39
-    INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT, INPUT,  // 40-49
-    INPUT, INPUT, INPUT, INPUT, INPUT, INPUT                              // 50-55
-};
+// Mock pin modes
+uint8_t mock_pin_modes[56] = {0};
 
-// =============================================================================
-// MOCK WIRE (I2C) IMPLEMENTATION
-// =============================================================================
+// Mock Serial instances
+MockSerial Serial;
+MockSerial Serial1;
+MockSerial Serial2;
 
+// Mock Wire instance
 MockWire Wire;
 
-// Note: Serial objects are defined in individual test files
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
+
+// Initialize all mock values to defaults
+void mock_initialize() {
+    mock_millis_time = 0;
+    mock_micros_time = 0;
+    
+    // Set all analog pins to mid-range (1.65V for 3.3V reference)
+    for (int i = 0; i < 42; i++) {
+        mock_analog_values[i] = 2048;  // 12-bit mid-range
+    }
+    
+    // Set all digital pins to HIGH (inactive for pullup inputs)
+    for (int i = 0; i < 56; i++) {
+        mock_digital_values[i] = HIGH;
+        mock_pin_modes[i] = INPUT;
+    }
+}
+
+// =============================================================================
+// MOCK FUNCTIONS
+// =============================================================================
+
+// Functions are defined inline in the header file to avoid conflicts
+
+// =============================================================================
+// AUTOMATIC INITIALIZATION
+// =============================================================================
+
+// Automatically initialize mock values when library is loaded
+namespace {
+    struct MockInitializer {
+        MockInitializer() {
+            mock_initialize();
+        }
+    };
+    static MockInitializer g_mock_initializer;
+}
