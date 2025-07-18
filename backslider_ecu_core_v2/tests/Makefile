@@ -33,8 +33,8 @@ endef
 # Specific rules for modules that need additional sources
 
 # Main application now includes transmission module dependencies, external communications, storage manager, and configuration manager
-main_application/test_main_application: main_application/test_main_application.cpp ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../storage_backend.cpp ../config_manager.cpp ../ecu_config.cpp $(MOCK_SOURCES)
-	$(CXX) $(CXXFLAGS) -o $@ $< ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../storage_backend.cpp ../config_manager.cpp ../ecu_config.cpp $(MOCK_SOURCES)
+main_application/test_main_application: main_application/test_main_application.cpp ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../config_manager.cpp ../ecu_config.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../config_manager.cpp ../ecu_config.cpp $(MOCK_SOURCES)
 
 fuel_module/test_%: fuel_module/test_%.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $< ../mod_fuel.cpp $(ECU_SOURCES)
@@ -88,13 +88,17 @@ external_serial/test_external_serial: external_serial/test_external_serial.cpp .
 external_canbus/test_%: external_canbus/test_%.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $< ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 
-# Storage manager tests need storage_manager, storage_backend, msg_bus, and mock_arduino
-storage_manager/test_%: storage_manager/test_%.cpp ../storage_manager.cpp ../storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
-	$(CXX) $(CXXFLAGS) -o $@ $< ../storage_manager.cpp ../storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+# Storage manager tests need storage_manager, spi_flash_storage_backend, msg_bus, and mock_arduino
+storage_manager/test_storage_manager: storage_manager/test_storage_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 
-# Config manager tests need config_manager, storage_manager, storage_backend, ecu_config, msg_bus, and mock_arduino
-config_manager/test_%: config_manager/test_%.cpp ../config_manager.cpp ../storage_manager.cpp ../storage_backend.cpp ../ecu_config.cpp ../msg_bus.cpp $(MOCK_SOURCES)
-	$(CXX) $(CXXFLAGS) -o $@ $< ../config_manager.cpp ../storage_manager.cpp ../storage_backend.cpp ../ecu_config.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+# SPI Flash storage tests need spi_flash_storage_backend and mock_arduino
+storage_manager/test_spi_flash_storage: storage_manager/test_spi_flash_storage.cpp ../spi_flash_storage_backend.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../spi_flash_storage_backend.cpp $(MOCK_SOURCES)
+
+# Config manager tests need config_manager, storage_manager, spi_flash_storage_backend, ecu_config, msg_bus, and mock_arduino
+config_manager/test_%: config_manager/test_%.cpp ../config_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../ecu_config.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../config_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../ecu_config.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 
 # Run all tests in a specific module
 run-main: $(wildcard main_application/test_*)

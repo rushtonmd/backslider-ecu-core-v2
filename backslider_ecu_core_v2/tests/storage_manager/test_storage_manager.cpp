@@ -11,7 +11,7 @@
 MockSerial Serial;
 
 #include "../../storage_manager.h"
-#include "../../storage_backend.h"
+#include "../../spi_flash_storage_backend.h"
 #include "../../msg_bus.h"
 
 // Mock millis for testing - use the one from mock_arduino.cpp
@@ -22,7 +22,7 @@ void test_storage_manager() {
     std::cout << "=== Testing Storage Manager ===" << std::endl;
     
     // Create storage backend and manager
-    EEPROMStorageBackend backend;
+    SPIFlashStorageBackend backend;
     StorageManager storage_manager(&backend);
     
     // Initialize systems
@@ -142,7 +142,7 @@ void test_transmission_settings() {
     std::cout << "\n=== Testing Transmission Settings Use Case ===" << std::endl;
     
     // Create storage backend and manager
-    EEPROMStorageBackend backend;
+    SPIFlashStorageBackend backend;
     StorageManager storage_manager(&backend);
     
     // Initialize systems

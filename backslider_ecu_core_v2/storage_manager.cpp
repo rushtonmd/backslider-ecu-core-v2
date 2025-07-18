@@ -7,6 +7,7 @@ extern MockSerial Serial;
 #endif
 
 #include "storage_manager.h"
+#include "spi_flash_storage_backend.h"
 #include "msg_bus.h"
 #include "msg_definitions.h"  // For CRC16 function
 
@@ -392,20 +393,20 @@ void StorageManager::print_cache_info() {
 void StorageManager::print_storage_info() {
     if (backend) {
         Serial.println("=== Storage Backend Info ===");
-        // Cast to EEPROMStorageBackend for access to specific methods
-        EEPROMStorageBackend* eeprom_backend = static_cast<EEPROMStorageBackend*>(backend);
-        if (eeprom_backend) {
-            eeprom_backend->printStorageInfo();
+        // Cast to SPIFlashStorageBackend for access to specific methods
+        SPIFlashStorageBackend* spi_backend = static_cast<SPIFlashStorageBackend*>(backend);
+        if (spi_backend) {
+            spi_backend->printStorageInfo();
         }
     }
 }
 
 bool StorageManager::verify_integrity() {
     if (!backend) return false;
-    // Cast to EEPROMStorageBackend for access to specific methods
-    EEPROMStorageBackend* eeprom_backend = static_cast<EEPROMStorageBackend*>(backend);
-    if (eeprom_backend) {
-        return eeprom_backend->verifyIntegrity();
+    // Cast to SPIFlashStorageBackend for access to specific methods
+    SPIFlashStorageBackend* spi_backend = static_cast<SPIFlashStorageBackend*>(backend);
+    if (spi_backend) {
+        return spi_backend->verifyIntegrity();
     }
     return true;  // Default to true if backend doesn't support integrity check
 }

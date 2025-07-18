@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 #include "storage_manager.h"
-#include "storage_backend.h"
+#include "spi_flash_storage_backend.h"
 #include "config_manager.h"
 
 class MainApplication {
@@ -32,7 +32,7 @@ private:
     uint32_t last_status_report_ms;
     
     // Core systems (initialized in this order)
-    EEPROMStorageBackend storage_backend;
+    SPIFlashStorageBackend storage_backend;
     StorageManager storage_manager;
     ConfigManager config_manager;
     

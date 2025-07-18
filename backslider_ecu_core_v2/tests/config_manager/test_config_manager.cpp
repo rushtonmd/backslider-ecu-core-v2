@@ -4,7 +4,7 @@
 #include "../mock_arduino.h"
 #include "../config_manager.h"
 #include "../storage_manager.h"
-#include "../storage_backend.h"
+#include "../spi_flash_storage_backend.h"
 #include "../msg_bus.h"
 
 // Mock serial for testing
@@ -27,7 +27,7 @@ bool test_config_manager_initialization() {
     print_test_header("Configuration Manager Initialization");
     
     // Setup storage system
-    EEPROMStorageBackend storage_backend;
+    SPIFlashStorageBackend storage_backend;
     StorageManager storage_manager(&storage_backend);
     
     // Initialize storage first
@@ -62,7 +62,7 @@ bool test_config_manager_initialization() {
 bool test_config_validation() {
     print_test_header("Configuration Validation");
     
-    EEPROMStorageBackend storage_backend;
+    SPIFlashStorageBackend storage_backend;
     StorageManager storage_manager(&storage_backend);
     g_message_bus.init();
     storage_manager.init();
@@ -101,7 +101,7 @@ bool test_config_validation() {
 bool test_runtime_updates() {
     print_test_header("Runtime Configuration Updates");
     
-    EEPROMStorageBackend storage_backend;
+    SPIFlashStorageBackend storage_backend;
     StorageManager storage_manager(&storage_backend);
     g_message_bus.init();
     storage_manager.init();
@@ -150,7 +150,7 @@ bool test_runtime_updates() {
 bool test_config_persistence() {
     print_test_header("Configuration Persistence");
     
-    EEPROMStorageBackend storage_backend;
+    SPIFlashStorageBackend storage_backend;
     StorageManager storage_manager(&storage_backend);
     g_message_bus.init();
     storage_manager.init();
@@ -197,7 +197,7 @@ bool test_error_handling() {
     print_test_result("Null storage manager handled", !init_with_null);
     
     // Test with valid storage manager
-    EEPROMStorageBackend storage_backend;
+    SPIFlashStorageBackend storage_backend;
     StorageManager storage_manager(&storage_backend);
     g_message_bus.init();
     storage_manager.init();
@@ -225,7 +225,7 @@ bool test_error_handling() {
 bool test_factory_reset() {
     print_test_header("Factory Reset");
     
-    EEPROMStorageBackend storage_backend;
+    SPIFlashStorageBackend storage_backend;
     StorageManager storage_manager(&storage_backend);
     g_message_bus.init();
     storage_manager.init();
@@ -259,7 +259,7 @@ bool test_factory_reset() {
 bool test_transmission_settings() {
     print_test_header("Transmission-Specific Settings");
     
-    EEPROMStorageBackend storage_backend;
+    SPIFlashStorageBackend storage_backend;
     StorageManager storage_manager(&storage_backend);
     g_message_bus.init();
     storage_manager.init();
@@ -293,7 +293,7 @@ bool test_transmission_settings() {
 bool test_spi_configuration() {
     print_test_header("SPI Configuration");
     
-    EEPROMStorageBackend storage_backend;
+    SPIFlashStorageBackend storage_backend;
     StorageManager storage_manager(&storage_backend);
     g_message_bus.init();
     storage_manager.init();
