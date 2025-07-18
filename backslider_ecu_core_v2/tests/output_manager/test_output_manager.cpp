@@ -7,9 +7,6 @@
 // Include enhanced mock Arduino before any ECU code
 #include "../mock_arduino.h"
 
-// Define the Serial mock object
-MockSerial Serial;
-
 // Include message bus and output manager for testing
 #include "../../msg_definitions.h"
 #include "../../msg_bus.h"

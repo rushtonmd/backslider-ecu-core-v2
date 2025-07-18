@@ -5,6 +5,8 @@
 #include "../../transmission_module.h"
 #include "../../msg_bus.h"
 #include "../../parameter_helpers.h"
+#include "../../storage_manager.h"
+#include "../../spi_flash_storage_backend.h"
 
 #include <cassert>
 #include <cstring>
@@ -412,8 +414,17 @@ static bool test_parameter_broadcast() {
     return true;
 }
 
+// Global storage manager for testing
+static SPIFlashStorageBackend global_storage_backend;
+static StorageManager global_storage_manager(&global_storage_backend);
+StorageManager& g_storage_manager = global_storage_manager;
+
 int main() {
     std::cout << "=== Transmission Parameter Tests ===\n";
+    
+    // Initialize storage manager
+    global_storage_backend.begin();
+    g_storage_manager.init();
     
     // Initialize message bus
     g_message_bus.init();

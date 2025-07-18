@@ -9,9 +9,6 @@
 #include "../mock_arduino.h"
 #include "../../spi_flash_storage_backend.h"
 #include "../../msg_definitions.h"
-
-// Mock Arduino functions
-MockSerial Serial;
 extern uint32_t mock_millis_time;
 
 void test_basic_storage_operations() {
