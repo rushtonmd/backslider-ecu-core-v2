@@ -19,6 +19,10 @@
 class OBDIIHandler;
 class CustomMessageHandler;
 
+#if !defined(ARDUINO) || defined(TESTING)
+class MockFlexCAN;  // Forward declaration for testing
+#endif
+
 // External CAN bus statistics
 struct external_canbus_stats_t {
     uint32_t messages_sent;
@@ -133,7 +137,9 @@ public:
     bool inject_test_message(uint32_t can_id, const uint8_t* data, uint8_t length);
     bool inject_obdii_request(uint8_t pid);
     void simulate_external_device_request(uint32_t external_key);
+    #ifndef ARDUINO
     MockFlexCAN* get_mock_can() { return &mock_can; }
+    #endif
     #endif
     
 private:
