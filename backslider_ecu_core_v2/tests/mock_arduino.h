@@ -608,6 +608,54 @@ public:
 extern MockWire Wire;
 
 // =============================================================================
+// MOCK I2C DEVICE FUNCTIONS
+// =============================================================================
+
+// Global mock state for I2C devices
+extern int16_t mock_ads1015_readings[4];
+extern bool mock_mcp23017_pins[16];
+
+// Mock ADS1015 ADC functions
+inline int16_t mock_ads1015_read_channel(uint8_t channel) {
+    // Return a mock ADC reading (0-32767 for 16-bit)
+    if (channel < 4) {
+        return mock_ads1015_readings[channel];
+    }
+    return 0;
+}
+
+inline void mock_set_ads1015_reading(uint8_t channel, int16_t value) {
+    if (channel < 4) {
+        mock_ads1015_readings[channel] = value;
+    }
+}
+
+// Mock MCP23017 GPIO functions
+inline bool mock_mcp23017_read_pin(uint8_t pin) {
+    // Return a mock GPIO reading (HIGH by default for pullup inputs)
+    if (pin < 16) {
+        return mock_mcp23017_pins[pin];
+    }
+    return false;
+}
+
+inline void mock_set_mcp23017_pin(uint8_t pin, bool value) {
+    if (pin < 16) {
+        mock_mcp23017_pins[pin] = value;
+    }
+}
+
+inline void mock_mcp23017_write_pin(uint8_t pin, bool value) {
+    mock_set_mcp23017_pin(pin, value);
+}
+
+inline void mock_mcp23017_configure_pin(uint8_t pin, uint8_t mode) {
+    // Mock pin configuration - just store the mode
+    (void)pin;
+    (void)mode;
+}
+
+// =============================================================================
 // FORMAT CONSTANTS
 // =============================================================================
 

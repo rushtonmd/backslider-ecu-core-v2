@@ -21,6 +21,12 @@ extern MockSerial Serial1; // Additional serial port for external communications
 #include "sensor_calibration.h"
 #include "transmission_module.h"
 #include "ecu_config.h"
+
+// I2C device includes (Arduino only)
+#ifdef ARDUINO
+#include <Adafruit_ADS1X15.h>
+#include <Adafruit_MCP23X17.h>
+#endif
 // #include "engine_sensors.h"  // TODO: Create engine_sensors.h when ready
 // #include "transmission_sensors.h"  // TODO: Create transmission_sensors.h when ready
 
@@ -318,79 +324,9 @@ void MainApplication::printStatusReport() {
     Serial.println(storage_manager.get_disk_reads());
 
     #ifdef ARDUINO
-    // Print I2C device status
+    // Print I2C device status (now from input_manager)
     print_i2c_status();
     #endif
 
     Serial.println("========================");
 }
-
-// =============================================================================
-// I2C DEVICE HELPER FUNCTIONS
-// =============================================================================
-
-#ifdef ARDUINO
-// Global access to I2C devices for other modules
-extern Adafruit_ADS1015 ads1015;
-extern Adafruit_MCP23X17 mcp;
-
-// Function to read from ADS1015 ADC
-int16_t read_ads1015_channel(uint8_t channel) {
-    if (channel > 3) return 0;  // Invalid channel
-    
-    switch (channel) {
-        case 0: return ads1015.readADC_SingleEnded(0);
-        case 1: return ads1015.readADC_SingleEnded(1);
-        case 2: return ads1015.readADC_SingleEnded(2);
-        case 3: return ads1015.readADC_SingleEnded(3);
-        default: return 0;
-    }
-}
-
-// Function to read from MCP23017 GPIO expander
-bool read_mcp23017_pin(uint8_t pin) {
-    if (pin > 15) return false;  // Invalid pin
-    return mcp.digitalRead(pin);
-}
-
-// Function to write to MCP23017 GPIO expander
-void write_mcp23017_pin(uint8_t pin, bool value) {
-    if (pin > 15) return;  // Invalid pin
-    mcp.digitalWrite(pin, value);
-}
-
-// Function to configure MCP23017 pin mode
-void configure_mcp23017_pin(uint8_t pin, uint8_t mode) {
-    if (pin > 15) return;  // Invalid pin
-    mcp.pinMode(pin, mode);
-}
-
-// Function to get I2C device status for status report
-void print_i2c_status() {
-    const ECUConfiguration& config = config_manager.getConfig();
-    
-    Serial.println("=== I2C Device Status ===");
-    Serial.print("I2C Bus Frequency: ");
-    Serial.print(config.i2c.bus_frequency);
-    Serial.println(" Hz");
-    
-    if (config.i2c.adc.enabled) {
-        Serial.print("ADS1015 ADC (0x");
-        Serial.print(config.i2c.adc.address, HEX);
-        Serial.println("): Enabled");
-        // Note: We could add actual device communication test here
-    } else {
-        Serial.println("ADS1015 ADC: Disabled");
-    }
-    
-    if (config.i2c.gpio_expander.enabled) {
-        Serial.print("MCP23017 GPIO (0x");
-        Serial.print(config.i2c.gpio_expander.address, HEX);
-        Serial.println("): Enabled");
-        // Note: We could add actual device communication test here
-    } else {
-        Serial.println("MCP23017 GPIO: Disabled");
-    }
-    Serial.println("========================");
-}
-#endif

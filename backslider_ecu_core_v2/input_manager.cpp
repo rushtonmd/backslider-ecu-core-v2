@@ -17,10 +17,17 @@
 #include <iostream>
 #endif
 
-// Include I2C helper functions from main application
+// I2C device includes (Arduino only)
 #ifdef ARDUINO
-extern int16_t read_ads1015_channel(uint8_t channel);
-extern bool read_mcp23017_pin(uint8_t pin);
+#include <Adafruit_ADS1X15.h>
+#include <Adafruit_MCP23X17.h>
+#include "ecu_config.h"
+#include "config_manager.h"
+
+// Global access to I2C devices
+extern Adafruit_ADS1015 ads1015;
+extern Adafruit_MCP23X17 mcp;
+extern ConfigManager config_manager;
 #endif
 
 // =============================================================================
@@ -376,16 +383,10 @@ static void update_single_sensor(uint8_t sensor_index) {
         }
             
         case SENSOR_I2C_GPIO: {
-            #ifdef ARDUINO
-            // Read from MCP23017 GPIO
+            // Read from MCP23017 GPIO (works in both Arduino and testing environments)
             bool gpio_value = read_mcp23017_pin(sensor->config.i2c_gpio.pin);
             runtime->raw_counts = gpio_value ? 1 : 0;
             runtime->raw_voltage = gpio_value ? ADC_VOLTAGE_REF : 0.0f;
-            #else
-            // Mock reading for testing
-            runtime->raw_counts = 0;
-            runtime->raw_voltage = 0.0f;
-            #endif
             
             // Create digital config structure for calibration
             digital_config_t digital_config = {
@@ -1043,3 +1044,89 @@ static bool should_publish_interrupt_message(uint8_t sensor_index) {
     }
     return false;  // Not found
 }
+
+// =============================================================================
+// I2C DEVICE HELPER FUNCTIONS
+// =============================================================================
+
+#ifdef ARDUINO
+// Function to read from ADS1015 ADC
+int16_t read_ads1015_channel(uint8_t channel) {
+    if (channel > 3) return 0;  // Invalid channel
+    
+    switch (channel) {
+        case 0: return ads1015.readADC_SingleEnded(0);
+        case 1: return ads1015.readADC_SingleEnded(1);
+        case 2: return ads1015.readADC_SingleEnded(2);
+        case 3: return ads1015.readADC_SingleEnded(3);
+        default: return 0;
+    }
+}
+
+// Function to read from MCP23017 GPIO expander
+bool read_mcp23017_pin(uint8_t pin) {
+    if (pin > 15) return false;  // Invalid pin
+    return mcp.digitalRead(pin);
+}
+
+// Function to write to MCP23017 GPIO expander
+void write_mcp23017_pin(uint8_t pin, bool value) {
+    if (pin > 15) return;  // Invalid pin
+    mcp.digitalWrite(pin, value);
+}
+
+// Function to configure MCP23017 pin mode
+void configure_mcp23017_pin(uint8_t pin, uint8_t mode) {
+    if (pin > 15) return;  // Invalid pin
+    mcp.pinMode(pin, mode);
+}
+
+// Function to print I2C device status
+void print_i2c_status() {
+    const ECUConfiguration& config = config_manager.getConfig();
+    
+    Serial.println("--- I2C Device Status ---");
+    Serial.print("ADS1015 Enabled: "); Serial.println(config.i2c.ads1015_enabled ? "Yes" : "No");
+    if (config.i2c.ads1015_enabled) {
+        Serial.print("  Address: 0x"); Serial.println(config.i2c.ads1015_address, HEX);
+    }
+    Serial.print("MCP23017 Enabled: "); Serial.println(config.i2c.mcp23017_enabled ? "Yes" : "No");
+    if (config.i2c.mcp23017_enabled) {
+        Serial.print("  Address: 0x"); Serial.println(config.i2c.mcp23017_address, HEX);
+    }
+    Serial.println("-------------------------");
+}
+#else
+// Mock implementations for testing environment
+int16_t read_ads1015_channel(uint8_t channel) {
+    return mock_ads1015_read_channel(channel);
+}
+
+bool read_mcp23017_pin(uint8_t pin) {
+    return mock_mcp23017_read_pin(pin);
+}
+
+void write_mcp23017_pin(uint8_t pin, bool value) {
+    mock_mcp23017_write_pin(pin, value);
+}
+
+void configure_mcp23017_pin(uint8_t pin, uint8_t mode) {
+    mock_mcp23017_configure_pin(pin, mode);
+}
+
+void print_i2c_status() {
+    // Mock implementation - just print a status message
+    #ifdef ARDUINO
+    Serial.println("--- I2C Device Status (Mock) ---");
+    Serial.println("ADS1015: Mock Enabled");
+    Serial.println("MCP23017: Mock Enabled");
+    Serial.println("-------------------------");
+    #else
+    // In testing environment, just use cout
+    std::cout << "--- I2C Device Status (Mock) ---" << std::endl;
+    std::cout << "ADS1015: Mock Enabled" << std::endl;
+    std::cout << "MCP23017: Mock Enabled" << std::endl;
+    std::cout << "-------------------------" << std::endl;
+    #endif
+}
+#endif

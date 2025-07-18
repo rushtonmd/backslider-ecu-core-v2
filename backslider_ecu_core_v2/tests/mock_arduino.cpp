@@ -23,6 +23,11 @@ uint8_t mock_digital_values[56] = {0};
 // Mock pin modes
 uint8_t mock_pin_modes[56] = {0};
 
+// Global mock state for I2C devices
+int16_t mock_ads1015_readings[4] = {16384, 16384, 16384, 16384}; // Mid-range by default
+bool mock_mcp23017_pins[16] = {true, true, true, true, true, true, true, true, 
+                               true, true, true, true, true, true, true, true}; // HIGH by default
+
 // Mock Serial instances
 MockSerial Serial;
 MockSerial Serial1;
@@ -49,6 +54,14 @@ void mock_initialize() {
     for (int i = 0; i < 56; i++) {
         mock_digital_values[i] = HIGH;
         mock_pin_modes[i] = INPUT;
+    }
+    
+    // Reset I2C device mock state
+    for (int i = 0; i < 4; i++) {
+        mock_ads1015_readings[i] = 16384; // Mid-range ADC readings
+    }
+    for (int i = 0; i < 16; i++) {
+        mock_mcp23017_pins[i] = true; // HIGH for pullup inputs
     }
 }
 

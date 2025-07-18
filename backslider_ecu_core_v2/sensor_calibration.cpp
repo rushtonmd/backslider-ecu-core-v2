@@ -163,6 +163,7 @@ uint8_t validate_calibrated_reading(sensor_type_t type, float value) {
             return (value >= -60.0f && value <= 200.0f) ? 1 : 0;
             
         case SENSOR_DIGITAL_PULLUP:
+        case SENSOR_I2C_GPIO:
             // Digital values should be 0 or 1
             return (value == 0.0f || value == 1.0f) ? 1 : 0;
             
