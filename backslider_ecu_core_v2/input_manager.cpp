@@ -17,6 +17,12 @@
 #include <iostream>
 #endif
 
+// Include I2C helper functions from main application
+#ifdef ARDUINO
+extern int16_t read_ads1015_channel(uint8_t channel);
+extern bool read_mcp23017_pin(uint8_t pin);
+#endif
+
 // =============================================================================
 // INTERRUPT EDGE DEFINITIONS
 // =============================================================================
@@ -345,6 +351,51 @@ static void update_single_sensor(uint8_t sensor_index) {
             break;
         }
             
+        case SENSOR_I2C_ADC: {
+            #ifdef ARDUINO
+            // Read from ADS1015 ADC
+            int16_t adc_value = read_ads1015_channel(sensor->config.i2c_adc.channel);
+            runtime->raw_counts = adc_value;
+            runtime->raw_voltage = (adc_value * 6.144f) / 32767.0f; // Convert to voltage based on ±6.144V range
+            #else
+            // Mock reading for testing
+            runtime->raw_counts = 16384; // Mid-range 16-bit reading
+            runtime->raw_voltage = 3.0f; // Mock voltage
+            #endif
+            
+            // Create linear config structure for calibration
+            linear_config_t linear_config = {
+                .min_voltage = sensor->config.i2c_adc.min_voltage,
+                .max_voltage = sensor->config.i2c_adc.max_voltage,
+                .min_value = sensor->config.i2c_adc.min_value,
+                .max_value = sensor->config.i2c_adc.max_value,
+                .pullup_ohms = 0
+            };
+            calibrated_value = calibrate_linear(&linear_config, runtime->raw_voltage);
+            break;
+        }
+            
+        case SENSOR_I2C_GPIO: {
+            #ifdef ARDUINO
+            // Read from MCP23017 GPIO
+            bool gpio_value = read_mcp23017_pin(sensor->config.i2c_gpio.pin);
+            runtime->raw_counts = gpio_value ? 1 : 0;
+            runtime->raw_voltage = gpio_value ? ADC_VOLTAGE_REF : 0.0f;
+            #else
+            // Mock reading for testing
+            runtime->raw_counts = 0;
+            runtime->raw_voltage = 0.0f;
+            #endif
+            
+            // Create digital config structure for calibration
+            digital_config_t digital_config = {
+                .use_pullup = sensor->config.i2c_gpio.use_pullup,
+                .invert_logic = sensor->config.i2c_gpio.invert_logic
+            };
+            calibrated_value = calibrate_digital(&digital_config, runtime->raw_counts);
+            break;
+        }
+            
         default:
             calibrated_value = 0.0f;
             break;
@@ -393,6 +444,16 @@ static void configure_sensor_pin(const sensor_definition_t* sensor, uint8_t sens
                                                    sensor->config.frequency.trigger_edge);
                 #endif
             }
+            break;
+            
+        case SENSOR_I2C_ADC:
+            // I2C ADC sensors don't need pin configuration
+            // The ADS1015 is already initialized in main_application.cpp
+            break;
+            
+        case SENSOR_I2C_GPIO:
+            // I2C GPIO sensors don't need pin configuration
+            // The MCP23017 is already initialized in main_application.cpp
             break;
             
         case SENSOR_TYPE_COUNT:

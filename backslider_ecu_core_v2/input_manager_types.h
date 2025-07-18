@@ -18,6 +18,8 @@ typedef enum {
     SENSOR_THERMISTOR,           // Non-linear thermistor with lookup table
     SENSOR_DIGITAL_PULLUP,       // Digital input with pullup
     SENSOR_FREQUENCY_COUNTER,    // Frequency-based sensor (speed, RPM)
+    SENSOR_I2C_ADC,              // I2C ADC (ADS1015) input
+    SENSOR_I2C_GPIO,             // I2C GPIO (MCP23017) input
     SENSOR_TYPE_COUNT            // Keep this last
 } sensor_type_t;
 
@@ -58,12 +60,31 @@ typedef struct {
     uint8_t trigger_edge;       // 0=RISING, 1=FALLING, 2=CHANGE (interrupt mode only)
 } frequency_config_t;
 
+// Configuration for I2C ADC sensors (ADS1015)
+typedef struct {
+    uint8_t channel;            // ADC channel (0-3)
+    float min_voltage;          // Voltage at minimum value
+    float max_voltage;          // Voltage at maximum value
+    float min_value;            // Minimum output value
+    float max_value;            // Maximum output value
+    uint8_t gain_setting;       // ADC gain setting (0-5, see ADS1015 datasheet)
+} i2c_adc_config_t;
+
+// Configuration for I2C GPIO sensors (MCP23017)
+typedef struct {
+    uint8_t pin;                // GPIO pin number (0-15)
+    uint8_t use_pullup;         // 1 = enable internal pullup
+    uint8_t invert_logic;       // 1 = invert reading (active low)
+} i2c_gpio_config_t;
+
 // Union for sensor-specific configuration
 typedef union {
     linear_config_t linear;
     thermistor_config_t thermistor;
     digital_config_t digital;
     frequency_config_t frequency;
+    i2c_adc_config_t i2c_adc;
+    i2c_gpio_config_t i2c_gpio;
 } sensor_config_u;
 
 // =============================================================================

@@ -451,4 +451,67 @@ static inline uint8_t is_voltage_valid(float voltage) {
 // SPEED_SENSOR_PULSES_PER_FOOT(pin5, MSG_VEHICLE_SPEED, 500)    // 500 pulses/foot → MPH
 // SPEED_SENSOR_PULSES_PER_METER(pin6, MSG_VEHICLE_SPEED, 100)   // 100 pulses/meter → m/s
 
+// =============================================================================
+// I2C SENSOR CONFIGURATION MACROS
+// =============================================================================
+
+// Helper macro to define an I2C ADC sensor (ADS1015)
+#define DEFINE_I2C_ADC_SENSOR(channel_num, msg_id_name, min_v, max_v, min_val, max_val, gain_setting, interval_us, sensor_name) \
+    { \
+        .pin = 0xFF, /* Not used for I2C sensors */ \
+        .type = SENSOR_I2C_ADC, \
+        .config.i2c_adc = { \
+            .channel = channel_num, \
+            .min_voltage = min_v, \
+            .max_voltage = max_v, \
+            .min_value = min_val, \
+            .max_value = max_val, \
+            .gain_setting = gain_setting \
+        }, \
+        .msg_id = msg_id_name, \
+        .update_interval_us = interval_us, \
+        .filter_strength = 32, \
+        .name = sensor_name \
+    }
+
+// Helper macro to define an I2C GPIO sensor (MCP23017)
+#define DEFINE_I2C_GPIO_SENSOR(pin_num, msg_id_name, use_pullup, invert_logic, interval_us, sensor_name) \
+    { \
+        .pin = 0xFF, /* Not used for I2C sensors */ \
+        .type = SENSOR_I2C_GPIO, \
+        .config.i2c_gpio = { \
+            .pin = pin_num, \
+            .use_pullup = use_pullup, \
+            .invert_logic = invert_logic \
+        }, \
+        .msg_id = msg_id_name, \
+        .update_interval_us = interval_us, \
+        .filter_strength = 16, \
+        .name = sensor_name \
+    }
+
+// =============================================================================
+// COMMON I2C SENSOR CONFIGURATIONS
+// =============================================================================
+
+// I2C ADC sensor for pressure sensors (0-5V range)
+#define I2C_PRESSURE_SENSOR(channel_num, msg_id_name) \
+    DEFINE_I2C_ADC_SENSOR(channel_num, msg_id_name, 0.0f, 5.0f, 0.0f, 100.0f, 0, 100000, "I2C Pressure")
+
+// I2C ADC sensor for temperature sensors (0-5V range)
+#define I2C_TEMPERATURE_SENSOR(channel_num, msg_id_name) \
+    DEFINE_I2C_ADC_SENSOR(channel_num, msg_id_name, 0.0f, 5.0f, -40.0f, 150.0f, 0, 100000, "I2C Temperature")
+
+// I2C ADC sensor for throttle position (0-5V range)
+#define I2C_THROTTLE_SENSOR(channel_num, msg_id_name) \
+    DEFINE_I2C_ADC_SENSOR(channel_num, msg_id_name, 0.0f, 5.0f, 0.0f, 100.0f, 0, 50000, "I2C Throttle")
+
+// I2C GPIO sensor for digital switches
+#define I2C_DIGITAL_SENSOR(pin_num, msg_id_name) \
+    DEFINE_I2C_GPIO_SENSOR(pin_num, msg_id_name, 1, 0, 100000, "I2C Digital")
+
+// I2C GPIO sensor for digital switches (inverted logic)
+#define I2C_DIGITAL_SENSOR_INVERTED(pin_num, msg_id_name) \
+    DEFINE_I2C_GPIO_SENSOR(pin_num, msg_id_name, 1, 1, 100000, "I2C Digital Inverted")
+
 #endif
