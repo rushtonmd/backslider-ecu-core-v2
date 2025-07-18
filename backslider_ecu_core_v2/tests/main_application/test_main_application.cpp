@@ -12,8 +12,18 @@
 
 // Include main application and dependencies
 #include "../../main_application.h"
+#include "../../msg_definitions.h"
 #include "../../msg_bus.h"
 #include "../../input_manager.h"
+
+// Include storage manager for custom_canbus_manager
+#include "../../storage_manager.h"
+#include "../../spi_flash_storage_backend.h"
+
+// Global instances for testing (needed for custom_canbus_manager linkage)
+static SPIFlashStorageBackend global_storage_backend;
+static StorageManager global_storage_manager(&global_storage_backend);
+StorageManager& g_storage_manager = global_storage_manager;
 
 // Simple test framework
 int tests_run = 0;
@@ -224,6 +234,10 @@ TEST(status_reporting) {
 // Main test runner
 int main() {
     std::cout << "=== Main Application Tests ===" << std::endl;
+    
+    // Initialize storage manager for custom_canbus_manager linkage
+    global_storage_backend.begin();
+    g_storage_manager.init();
     
     // Run all tests
     run_test_main_application_initialization();
