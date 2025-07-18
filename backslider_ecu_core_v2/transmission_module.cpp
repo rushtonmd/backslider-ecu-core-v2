@@ -27,10 +27,14 @@
 #include "msg_bus.h"
 #include "parameter_helpers.h"
 #include "thermistor_table_generator.h"
+#include "custom_canbus_manager.h"
 
 // Forward declarations to avoid header conflicts
 typedef struct output_definition_t output_definition_t;
 extern uint8_t output_manager_register_outputs(output_definition_t* outputs, uint8_t count);
+
+// External global instances
+extern CustomCanBusManager g_custom_canbus_manager;
 
 #ifdef ARDUINO
 #include <Arduino.h>
@@ -281,6 +285,9 @@ static float get_vehicle_speed_with_timeout(void);
 static bool get_brake_pedal_with_timeout(void);
 static bool is_decelerating_with_timeout(void);
 
+// External CAN bus configuration
+static void configure_external_canbus_mappings(void);
+
 // =============================================================================
 // PUBLIC FUNCTIONS
 // =============================================================================
@@ -305,6 +312,9 @@ uint8_t transmission_module_init(void) {
     // uint8_t registered_outputs = output_manager_register_outputs(TRANSMISSION_OUTPUTS, TRANSMISSION_OUTPUT_COUNT);
     uint8_t registered_outputs = TRANSMISSION_OUTPUT_COUNT;  // For now, assume all outputs registered
     (void)registered_outputs;  // Suppress unused variable warning
+    
+    // Configure external CAN bus mappings for transmission data
+    configure_external_canbus_mappings();
     
     // Subscribe to transmission messages
     subscribe_to_transmission_messages();
@@ -351,6 +361,36 @@ uint8_t transmission_module_init(void) {
     #endif
     
     return registered_sensors;
+}
+
+// =============================================================================
+// EXTERNAL CAN BUS CONFIGURATION
+// =============================================================================
+
+static void configure_external_canbus_mappings(void) {
+    // Configure Haltech throttle position mapping
+    // Maps Haltech CAN ID 0x360 to internal MSG_THROTTLE_POSITION
+    can_mapping_t throttle_mapping = create_can_mapping(
+        0x360,                      // External CAN ID (Haltech throttle position)
+        MSG_THROTTLE_POSITION,      // Internal message ID
+        0,                          // Start at byte 0
+        2,                          // 2 bytes long
+        false,                      // Little endian
+        0.1f,                       // Scale factor (raw * 0.1 = percentage)
+        0.0f,                       // Min value
+        100.0f                      // Max value
+    );
+    
+    // Add the mapping to the custom CAN bus manager
+    if (g_custom_canbus_manager.add_mapping(throttle_mapping)) {
+        #ifdef ARDUINO
+        Serial.println("Transmission: Added Haltech throttle position mapping (0x360 -> MSG_THROTTLE_POSITION)");
+        #endif
+    } else {
+        #ifdef ARDUINO
+        Serial.println("Transmission: Failed to add Haltech throttle position mapping");
+        #endif
+    }
 }
 
 void transmission_module_update(void) {

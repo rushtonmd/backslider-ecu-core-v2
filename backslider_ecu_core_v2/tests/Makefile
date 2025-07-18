@@ -72,9 +72,9 @@ input_manager/test_input_manager_thermistors: input_manager/test_input_manager_t
 input_manager/test_input_manager_frequency_counter: input_manager/test_input_manager_frequency_counter.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
 
-# Transmission module tests need all sensor components plus transmission module
-transmission_module/test_%: transmission_module/test_%.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp mock_arduino.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp mock_arduino.cpp
+# Transmission module tests need all sensor components plus transmission module and custom_canbus_manager
+transmission_module/test_%: transmission_module/test_%.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../custom_canbus_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp mock_arduino.cpp
+	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../custom_canbus_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp mock_arduino.cpp
 
 # Output manager tests need msg_bus, output_manager, and mock_arduino
 output_manager/test_output_manager: output_manager/test_output_manager.cpp ../msg_bus.cpp ../output_manager.cpp $(MOCK_SOURCES)

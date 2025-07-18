@@ -29,6 +29,15 @@
 #include "../../sensor_calibration.h"
 #include "../../transmission_module.h"
 
+// Include storage manager for custom_canbus_manager
+#include "../../storage_manager.h"
+#include "../../spi_flash_storage_backend.h"
+
+// Global instances for testing
+static SPIFlashStorageBackend global_storage_backend;
+static StorageManager global_storage_manager(&global_storage_backend);
+StorageManager& g_storage_manager = global_storage_manager;
+
 // Simple test framework
 int tests_run = 0;
 int tests_passed = 0;
@@ -770,6 +779,10 @@ TEST(paddle_debounce_configuration) {
 
 int main() {
     std::cout << "=== Transmission Module Basic Tests ===" << std::endl;
+    
+    // Initialize storage manager for custom_canbus_manager
+    global_storage_backend.begin();
+    g_storage_manager.init();
     
     // Run initialization tests
     std::cout << "\n--- Initialization Tests ---" << std::endl;
