@@ -8,13 +8,17 @@
 // Include mock Arduino before any ECU code
 #include "../mock_arduino.h"
 
-// Define the Serial mock object
-MockSerial Serial;
-
 // Include the OBD-II handler and related components
 #include "../../msg_definitions.h"
 #include "../../external_canbus_cache.h"
 #include "../../obdii_handler.h"
+#include "../../storage_manager.h"
+#include "../../spi_flash_storage_backend.h"
+
+// Global instances for testing (needed for custom_canbus_manager linkage)
+static SPIFlashStorageBackend global_storage_backend;
+static StorageManager global_storage_manager(&global_storage_backend);
+StorageManager& g_storage_manager = global_storage_manager;
 
 // Simple test framework
 int tests_run = 0;
@@ -288,6 +292,10 @@ void run_all_tests() {
 }
 
 int main() {
+    // Initialize storage manager for custom_canbus_manager linkage
+    global_storage_backend.begin();
+    g_storage_manager.init();
+    
     run_all_tests();
     return (tests_passed == tests_run) ? 0 : 1;
 } 

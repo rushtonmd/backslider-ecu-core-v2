@@ -7,9 +7,6 @@
 #include "../spi_flash_storage_backend.h"
 #include "../msg_bus.h"
 
-// Mock serial for testing
-MockSerial Serial;
-
 // Global message bus for testing (extern declaration)
 extern MessageBus g_message_bus;
 

@@ -14,13 +14,17 @@ extern uint16_t mock_analog_values[42];
 extern uint8_t mock_digital_values[56];
 extern uint8_t mock_pin_modes[56];
 
-// Define the Serial mock object
-MockSerial Serial;
-
 // Include ECU modules for testing
 #include "../../msg_definitions.h"
 #include "../../msg_bus.h"
 #include "../../external_canbus_cache.h"
+#include "../../storage_manager.h"
+#include "../../spi_flash_storage_backend.h"
+
+// Global instances for testing (needed for custom_canbus_manager linkage)
+static SPIFlashStorageBackend global_storage_backend;
+static StorageManager global_storage_manager(&global_storage_backend);
+StorageManager& g_storage_manager = global_storage_manager;
 
 // Simple test framework
 int tests_run = 0;
@@ -349,6 +353,10 @@ TEST(cache_automatic_mapping_loading) {
 // Main test runner
 int main() {
     std::cout << "=== External CAN Bus Cache Focused Tests ===" << std::endl;
+    
+    // Initialize storage manager for custom_canbus_manager linkage
+    global_storage_backend.begin();
+    g_storage_manager.init();
     
     // Run all tests
     run_test_cache_constants_and_mappings();
