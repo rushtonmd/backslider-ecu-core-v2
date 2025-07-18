@@ -3,9 +3,13 @@
 
 #include "custom_canbus_manager.h"
 #include "external_canbus.h"
+#include "storage_manager.h"
 
 // Global instance
 CustomCanBusManager g_custom_canbus_manager;
+
+// External global instances
+extern StorageManager g_storage_manager;
 
 // Static pointer for message handler callback
 static CustomCanBusManager* g_manager_instance = nullptr;
@@ -39,10 +43,11 @@ bool CustomCanBusManager::init() {
     g_manager_instance = this;
     
     // Load configuration from storage
-    if (!load_configuration()) {
-        debug_print("CustomCanBusManager: Warning - Could not load configuration");
-        // Continue with empty configuration
-    }
+    // TEMPORARILY COMMENTED OUT FOR DEBUGGING
+    // if (!load_configuration()) {
+    //     debug_print("CustomCanBusManager: Warning - Could not load configuration");
+    //     // Continue with empty configuration
+    // }
     
     // Register message handlers for all configured mappings
     for (uint8_t i = 0; i < mapping_count; i++) {
@@ -303,7 +308,11 @@ void CustomCanBusManager::handle_can_message(uint32_t can_id, const uint8_t* dat
     }
     
     // Extract value from CAN message
-    float value = extract_value(data, length, mapping);
+    float value = 0.0f;
+    if (!extract_value(data, length, mapping, &value)) {
+        // Extraction failed - error already logged in extract_value
+        return;
+    }
     
     // Validate extracted value
     if (!validate_value(value, mapping)) {
@@ -337,13 +346,19 @@ void CustomCanBusManager::message_handler_wrapper(uint32_t can_id, const uint8_t
 // VALUE EXTRACTION AND VALIDATION
 // =============================================================================
 
-float CustomCanBusManager::extract_value(const uint8_t* data, uint8_t length, const can_mapping_t& mapping) {
+bool CustomCanBusManager::extract_value(const uint8_t* data, uint8_t length, const can_mapping_t& mapping, float* value) {
     const auto& extract = mapping.extraction;
+    
+    // Validate input parameters
+    if (data == nullptr || value == nullptr) {
+        stats.extraction_errors++;
+        return false;
+    }
     
     // Validate byte positions
     if (extract.byte_start + extract.byte_length > length) {
         stats.extraction_errors++;
-        return 0.0f;
+        return false;
     }
     
     // Extract raw value based on byte length
@@ -364,7 +379,7 @@ float CustomCanBusManager::extract_value(const uint8_t* data, uint8_t length, co
     } else {
         // Invalid byte length
         stats.extraction_errors++;
-        return 0.0f;
+        return false;
     }
     
     // Handle signed values
@@ -381,9 +396,9 @@ float CustomCanBusManager::extract_value(const uint8_t* data, uint8_t length, co
     }
     
     // Apply scale factor
-    float scaled_value = (float)raw_value * extract.scale_factor;
+    *value = (float)raw_value * extract.scale_factor;
     
-    return scaled_value;
+    return true;
 }
 
 bool CustomCanBusManager::validate_value(float value, const can_mapping_t& mapping) {
@@ -564,6 +579,14 @@ void CustomCanBusManager::debug_print_mapping(const can_mapping_t& mapping) {
     Serial.print("  Max Value: "); Serial.println(mapping.validation.max_value);
     Serial.print("  Enabled: "); Serial.println(mapping.enabled ? "Yes" : "No");
     #endif
+}
+
+// =============================================================================
+// TESTING INTERFACE
+// =============================================================================
+
+void CustomCanBusManager::simulate_can_message(uint32_t can_id, const uint8_t* data, uint8_t length) {
+    handle_can_message(can_id, data, length);
 }
 
 // =============================================================================

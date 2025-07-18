@@ -84,9 +84,9 @@ output_manager/test_output_manager: output_manager/test_output_manager.cpp ../ms
 external_serial/test_external_serial: external_serial/test_external_serial.cpp ../external_serial.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $< ../external_serial.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 
-# External CAN bus tests need external_canbus, cache, handlers, msg_bus, and mock_arduino
-external_canbus/test_%: external_canbus/test_%.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../msg_bus.cpp $(MOCK_SOURCES)
-	$(CXX) $(CXXFLAGS) -o $@ $< ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+# External CAN bus tests need external_canbus, cache, handlers, custom_canbus_manager, storage_manager, msg_bus, and mock_arduino
+external_canbus/test_%: external_canbus/test_%.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../custom_canbus_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../custom_canbus_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 
 # Storage manager tests need storage_manager, spi_flash_storage_backend, msg_bus, and mock_arduino
 storage_manager/test_storage_manager: storage_manager/test_storage_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)

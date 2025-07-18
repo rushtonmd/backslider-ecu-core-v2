@@ -1,0 +1,19 @@
+CompileFlags:
+  Add: 
+    - -DTESTING
+    - -std=c++14
+    - -Wall
+  Remove:
+    - -W*
+    - -fcoroutines-ts
+
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None
+  Suppress:
+    - pp_file_not_found
+    - err_undeclared_var_use
+    - err_no_member
+
+Index:
+  Background: Skip 

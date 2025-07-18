@@ -165,6 +165,13 @@ public:
     void print_configuration();
     void print_statistics();
     
+    // =========================================================================
+    // TESTING INTERFACE
+    // =========================================================================
+    
+    // Public test interface for simulating CAN message reception
+    void simulate_can_message(uint32_t can_id, const uint8_t* data, uint8_t length);
+    
 private:
     // =========================================================================
     // INTERNAL DATA
@@ -187,7 +194,7 @@ private:
     static void message_handler_wrapper(uint32_t can_id, const uint8_t* data, uint8_t length);
     
     // Value extraction and validation
-    float extract_value(const uint8_t* data, uint8_t length, const can_mapping_t& mapping);
+    bool extract_value(const uint8_t* data, uint8_t length, const can_mapping_t& mapping, float* value);
     bool validate_value(float value, const can_mapping_t& mapping);
     
     // Mapping management
