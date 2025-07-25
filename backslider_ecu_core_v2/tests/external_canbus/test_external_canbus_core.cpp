@@ -86,8 +86,9 @@ TEST(external_canbus_creation_and_init) {
     assert(canbus.get_cache_size() == 0);
     assert(canbus.get_subscription_count() == 0);
     
-    // Initialize with default config
+    // Initialize with default config (but enable it for testing)
     external_canbus_config_t config = DEFAULT_EXTERNAL_CANBUS_CONFIG;
+    config.enabled = true;  // Enable for testing
     bool result = canbus.init(config);
     assert(result == true);
     assert(canbus.is_initialized() == true);
@@ -112,6 +113,7 @@ TEST(external_canbus_configuration) {
     
     // Test custom configuration
     external_canbus_config_t config = {
+        .enabled = true,  // Enable for testing
         .baudrate = 1000000,
         .enable_obdii = false,
         .enable_custom_messages = true,
@@ -138,7 +140,9 @@ TEST(external_canbus_cache_integration) {
     g_message_bus.init();
     
     ExternalCanBus canbus;
-    canbus.init(DEFAULT_EXTERNAL_CANBUS_CONFIG);
+    external_canbus_config_t config = DEFAULT_EXTERNAL_CANBUS_CONFIG;
+    config.enabled = true;  // Enable for testing
+    canbus.init(config);
     
     // Publish some data on internal message bus
     g_message_bus.publishFloat(MSG_ENGINE_RPM, 3500.0f);
@@ -173,7 +177,9 @@ TEST(external_canbus_obdii_values) {
     g_message_bus.init();
     
     ExternalCanBus canbus;
-    canbus.init(DEFAULT_EXTERNAL_CANBUS_CONFIG);
+    external_canbus_config_t config = DEFAULT_EXTERNAL_CANBUS_CONFIG;
+    config.enabled = true;  // Enable for testing
+    canbus.init(config);
     
     // Publish engine data
     g_message_bus.publishFloat(MSG_ENGINE_RPM, 4200.0f);
@@ -207,7 +213,9 @@ TEST(external_canbus_custom_messages) {
     test_setup();
     
     ExternalCanBus canbus;
-    canbus.init(DEFAULT_EXTERNAL_CANBUS_CONFIG);
+    external_canbus_config_t config = DEFAULT_EXTERNAL_CANBUS_CONFIG;
+    config.enabled = true;  // Enable for testing
+    canbus.init(config);
     
     // Reset static variables
     handler_called = false;
@@ -240,7 +248,9 @@ TEST(external_canbus_test_injection) {
     test_setup();
     
     ExternalCanBus canbus;
-    canbus.init(DEFAULT_EXTERNAL_CANBUS_CONFIG);
+    external_canbus_config_t config = DEFAULT_EXTERNAL_CANBUS_CONFIG;
+    config.enabled = true;  // Enable for testing
+    canbus.init(config);
     
     // Test OBD-II request injection
     bool result = canbus.inject_obdii_request(OBDII_PID_ENGINE_RPM);
@@ -274,7 +284,9 @@ TEST(external_canbus_statistics) {
     test_setup();
     
     ExternalCanBus canbus;
-    canbus.init(DEFAULT_EXTERNAL_CANBUS_CONFIG);
+    external_canbus_config_t config = DEFAULT_EXTERNAL_CANBUS_CONFIG;
+    config.enabled = true;  // Enable for testing
+    canbus.init(config);
     
     // Generate some activity
     canbus.send_custom_float(0x100, 1.0f);
@@ -315,7 +327,9 @@ TEST(external_canbus_error_handling) {
     assert(canbus.inject_test_message(0x100, nullptr, 0) == false);
     
     // Initialize normally
-    canbus.init(DEFAULT_EXTERNAL_CANBUS_CONFIG);
+    external_canbus_config_t config = DEFAULT_EXTERNAL_CANBUS_CONFIG;
+    config.enabled = true;  // Enable for testing
+    canbus.init(config);
     
     // Test invalid parameters
     assert(canbus.get_obdii_value(OBDII_PID_ENGINE_RPM, nullptr) == false);
@@ -341,7 +355,9 @@ TEST(external_canbus_full_integration) {
     g_message_bus.init();
     
     ExternalCanBus canbus;
-    canbus.init(DEFAULT_EXTERNAL_CANBUS_CONFIG);
+    external_canbus_config_t config = DEFAULT_EXTERNAL_CANBUS_CONFIG;
+    config.enabled = true;  // Enable for testing
+    canbus.init(config);
     
     // Simulate ECU publishing data
     g_message_bus.publishFloat(MSG_ENGINE_RPM, 3200.0f);

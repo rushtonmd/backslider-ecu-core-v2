@@ -161,26 +161,27 @@ void setup_output_message_capture() {
 // Helper function to simulate a specific gear position
 void set_gear_position(const char* gear) {
     // First, set all switches to inactive (HIGH for pullup inputs)
-    mock_set_mcp23017_pin(0, true);  // Park switch (I2C GPIO pin 0)
-    mock_set_mcp23017_pin(1, true);  // Reverse switch (I2C GPIO pin 1)
-    mock_set_mcp23017_pin(2, true);  // Neutral switch (I2C GPIO pin 2)
-    mock_set_mcp23017_pin(3, true);  // Drive switch (I2C GPIO pin 3)
-    mock_set_mcp23017_pin(4, true);  // Second switch (I2C GPIO pin 4)
-    mock_set_mcp23017_pin(5, true);  // First switch (I2C GPIO pin 5)
+    // Using direct digital pins instead of MCP23017 I2C GPIO
+    mock_set_digital_value(PIN_TRANS_PARK, HIGH);    // Park switch (pin 3)
+    mock_set_digital_value(PIN_TRANS_REVERSE, HIGH); // Reverse switch (pin 4)
+    mock_set_digital_value(PIN_TRANS_NEUTRAL, HIGH); // Neutral switch (pin 5)
+    mock_set_digital_value(PIN_TRANS_DRIVE, HIGH);   // Drive switch (pin 6)
+    mock_set_digital_value(PIN_TRANS_SECOND, HIGH);  // Second switch (pin 24)
+    mock_set_digital_value(PIN_TRANS_FIRST, HIGH);   // First switch (pin 25)
     
     // Then activate the specific gear (switches are active low, so LOW = pressed)
     if (strcmp(gear, "P") == 0) {
-        mock_set_mcp23017_pin(0, false);  // Park switch pressed
+        mock_set_digital_value(PIN_TRANS_PARK, LOW);    // Park switch pressed
     } else if (strcmp(gear, "R") == 0) {
-        mock_set_mcp23017_pin(1, false);  // Reverse switch pressed
+        mock_set_digital_value(PIN_TRANS_REVERSE, LOW); // Reverse switch pressed
     } else if (strcmp(gear, "N") == 0) {
-        mock_set_mcp23017_pin(2, false);  // Neutral switch pressed
+        mock_set_digital_value(PIN_TRANS_NEUTRAL, LOW); // Neutral switch pressed
     } else if (strcmp(gear, "D") == 0) {
-        mock_set_mcp23017_pin(3, false);  // Drive switch pressed
+        mock_set_digital_value(PIN_TRANS_DRIVE, LOW);   // Drive switch pressed
     } else if (strcmp(gear, "2") == 0) {
-        mock_set_mcp23017_pin(4, false);  // Second switch pressed
+        mock_set_digital_value(PIN_TRANS_SECOND, LOW);  // Second switch pressed
     } else if (strcmp(gear, "1") == 0) {
-        mock_set_mcp23017_pin(5, false);  // First switch pressed
+        mock_set_digital_value(PIN_TRANS_FIRST, LOW);   // First switch pressed
     }
 }
 
@@ -260,11 +261,11 @@ TEST(gear_position_detection) {
     set_gear_position("P");
     
     // Debug: Check if mock state was set correctly
-    printf("Debug: After set_gear_position('P'): MCP23017 pin 0 = %d\n", mock_mcp23017_read_pin(0));
+    printf("Debug: After set_gear_position('P'): Digital pin %d = %d\n", PIN_TRANS_PARK, digitalRead(PIN_TRANS_PARK));
     
     // Debug: Test direct mock function calls
-    mock_set_mcp23017_pin(0, false);
-    printf("Debug: After direct mock_set_mcp23017_pin(0, false): MCP23017 pin 0 = %d\n", mock_mcp23017_read_pin(0));
+    mock_set_digital_value(PIN_TRANS_PARK, LOW);
+    printf("Debug: After direct mock_set_digital_value(%d, LOW): Digital pin %d = %d\n", PIN_TRANS_PARK, PIN_TRANS_PARK, digitalRead(PIN_TRANS_PARK));
     
     // Subscribe to park switch message to debug
     g_message_bus.subscribe(MSG_TRANS_PARK_SWITCH, capture_park_switch_message);
@@ -279,7 +280,7 @@ TEST(gear_position_detection) {
     printf("Debug: Park=%d, Reverse=%d, Neutral=%d, Drive=%d, Second=%d, First=%d\n", 
            state->park_switch, state->reverse_switch, state->neutral_switch, 
            state->drive_switch, state->second_switch, state->first_switch);
-    printf("Debug: MCP23017 pin 0 (Park) = %d\n", mock_mcp23017_read_pin(0));
+    printf("Debug: Digital pin %d (Park) = %d\n", PIN_TRANS_PARK, digitalRead(PIN_TRANS_PARK));
     
     // Debug: Check if the input manager is reading the I2C GPIO correctly
     printf("Debug: Input manager sensor count = %d\n", input_manager_get_sensor_count());
@@ -348,8 +349,8 @@ TEST(invalid_gear_position_handling) {
     assert(transmission_get_invalid_gear_count() > 0);
     
     // Test multiple switches active (invalid)
-    mock_set_mcp23017_pin(0, false);  // Park switch pressed
-    mock_set_mcp23017_pin(3, false);  // Drive switch pressed (both active)
+    mock_set_digital_value(PIN_TRANS_PARK, LOW);   // Park switch pressed
+    mock_set_digital_value(PIN_TRANS_DRIVE, LOW);  // Drive switch pressed (both active)
     mock_set_micros(200000);  // 200ms
     update_system();
     assert(state->current_gear == GEAR_NEUTRAL);  // Should default to neutral for safety

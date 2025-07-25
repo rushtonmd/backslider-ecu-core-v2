@@ -155,10 +155,10 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
     
     // External CAN Bus Communication
     .external_canbus = {
-        .enabled = false,             // Completely disable external CAN bus
+        .enabled = true,             // Completely disable external CAN bus
         .baudrate = 500000,           // 500 kbps - standard automotive CAN
-        .enable_obdii = false,        // Disable OBD-II for now
-        .enable_custom_messages = false, // Disable custom messages for now
+        .enable_obdii = true,        // Disable OBD-II for now
+        .enable_custom_messages = true, // Disable custom messages for now
         .can_bus_number = 1,          // CAN1
         .cache_default_max_age_ms = 1000 // 1 second cache timeout
     },
