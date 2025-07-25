@@ -38,7 +38,7 @@
 
 // Transmission sensors
 #define PIN_TRANS_FLUID_TEMP   A13   // Transmission Fluid Temperature (thermistor)
-#define PIN_TRANS_INPUT_SPEED  A14   // Transmission Input Shaft Speed (analog)
+#define PIN_TRANS_INPUT_SPEED  32   // Transmission Input Shaft Speed (analog)
 #define PIN_TRANS_OUTPUT_SPEED A15   // Transmission Output Shaft Speed (analog)
 #define PIN_TRANS_LINE_PRESSURE A16  // Transmission Line Pressure (0.5-4.5V)
 
@@ -70,17 +70,17 @@
 // =============================================================================
 
 // Paddle shifter inputs (manual shifting)
-#define PIN_PADDLE_UPSHIFT     16    // Upshift paddle (momentary, ground trigger)
-#define PIN_PADDLE_DOWNSHIFT   17    // Downshift paddle (momentary, ground trigger)
+#define PIN_PADDLE_UPSHIFT     28    // Upshift paddle (momentary, ground trigger)
+#define PIN_PADDLE_DOWNSHIFT   29    // Downshift paddle (momentary, ground trigger)
 
 // Automatic transmission gear selector inputs
 // These read the transmission gear selector switch positions
-#define PIN_TRANS_PARK         22    // Park position switch (ground trigger)
-#define PIN_TRANS_REVERSE      23    // Reverse position switch (ground trigger)
-#define PIN_TRANS_NEUTRAL      24    // Neutral position switch (ground trigger)
-#define PIN_TRANS_DRIVE        25    // Drive position switch (ground trigger)
-#define PIN_TRANS_SECOND       26    // Second gear position switch (ground trigger)
-#define PIN_TRANS_FIRST        27    // First gear position switch (ground trigger)
+#define PIN_TRANS_PARK         3    // Park position switch (ground trigger)
+#define PIN_TRANS_REVERSE      4    // Reverse position switch (ground trigger)
+#define PIN_TRANS_NEUTRAL      5    // Neutral position switch (ground trigger)
+#define PIN_TRANS_DRIVE        6    // Drive position switch (ground trigger)
+#define PIN_TRANS_SECOND       24    // Second gear position switch (ground trigger)
+#define PIN_TRANS_FIRST        25    // First gear position switch (ground trigger)
 
 // Note: Removed PIN_TRANS_SPORT and PIN_TRANS_MANUAL to make room for
 // PIN_TRANS_SECOND and PIN_TRANS_FIRST for proper 6-position gear selector

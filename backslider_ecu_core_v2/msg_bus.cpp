@@ -6,6 +6,9 @@
 // Global message bus instance
 MessageBus g_message_bus;
 
+// Global broadcast handler (for external serial forwarding)
+MessageHandler MessageBus::global_broadcast_handler = nullptr;
+
 MessageBus::MessageBus() :
     subscriber_count(0),
     queue_head(0),
@@ -131,6 +134,12 @@ void MessageBus::process_internal_queue() {
 }
 
 void MessageBus::deliver_to_subscribers(const CANMessage& msg) {
+    // Call global broadcast handler first (for external serial forwarding)
+    if (global_broadcast_handler != nullptr) {
+        global_broadcast_handler(&msg);
+    }
+    
+    // Deliver to specific subscribers
     for (uint8_t i = 0; i < subscriber_count; i++) {
         if (subscribers[i].msg_id == msg.id && subscribers[i].handler != nullptr) {
             subscribers[i].handler(&msg);
@@ -166,6 +175,14 @@ void MessageBus::resetSubscribers() {
         subscribers[i].msg_id = 0;
         subscribers[i].handler = nullptr;
     }
+}
+
+void MessageBus::setGlobalBroadcastHandler(MessageHandler handler) {
+    global_broadcast_handler = handler;
+}
+
+void MessageBus::clearGlobalBroadcastHandler() {
+    global_broadcast_handler = nullptr;
 }
 
 void MessageBus::debug_print(const char* message) {

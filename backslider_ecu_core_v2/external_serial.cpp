@@ -32,23 +32,51 @@ SerialBridge::SerialBridge() :
 }
 
 bool SerialBridge::init(void* port, const serial_port_config_t& port_config) {
+    #ifdef ARDUINO
+    Serial.println("SerialBridge::init() - Starting...");
+    #endif
+    
     if (port == nullptr) {
+        #ifdef ARDUINO
+        Serial.println("SerialBridge::init() - Port is null, returning false");
+        #endif
         return false;
     }
+    
+    #ifdef ARDUINO
+    Serial.println("SerialBridge::init() - Port is valid");
+    #endif
     
     serial_port = port;
     config = port_config;
     enabled = config.enabled;
     
+    #ifdef ARDUINO
+    Serial.print("SerialBridge::init() - Enabled: ");
+    Serial.println(enabled ? "true" : "false");
+    #endif
+    
     if (enabled) {
+        #ifdef ARDUINO
+        Serial.println("SerialBridge::init() - Port is enabled, about to call begin()...");
+        #endif
+        
         // Only call begin() if it's a HardwareSerial (not USB Serial)
         // USB Serial is already initialized by Arduino framework
         // Note: We can't use dynamic_cast due to -fno-rtti, so we'll assume
         // that if the port is not Serial (USB), it's a HardwareSerial
         #ifdef ARDUINO
         if (serial_port != &Serial) {
+            Serial.println("SerialBridge::init() - Calling HardwareSerial::begin()...");
             static_cast<HardwareSerial*>(serial_port)->begin(config.baud_rate);
+            Serial.println("SerialBridge::init() - HardwareSerial::begin() completed");
+        } else {
+            Serial.println("SerialBridge::init() - Skipping begin() for USB Serial");
         }
+        #endif
+        
+        #ifdef ARDUINO
+        Serial.println("SerialBridge::init() - Resetting state...");
         #endif
         
         // Reset state
@@ -64,6 +92,10 @@ bool SerialBridge::init(void* port, const serial_port_config_t& port_config) {
         Serial.println(" baud");
         #endif
     }
+    
+    #ifdef ARDUINO
+    Serial.println("SerialBridge::init() - Completed successfully");
+    #endif
     
     return true;
 }
@@ -255,7 +287,15 @@ ExternalSerial::ExternalSerial() : initialized(false) {
 }
 
 bool ExternalSerial::init(const external_serial_config_t& new_config) {
+    #ifdef ARDUINO
+    Serial.println("ExternalSerial::init() - Starting...");
+    #endif
+    
     config = new_config;
+    
+    #ifdef ARDUINO
+    Serial.println("ExternalSerial::init() - Config copied");
+    #endif
     
     // Initialize serial bridges
     bool usb_ok = true;
@@ -263,11 +303,19 @@ bool ExternalSerial::init(const external_serial_config_t& new_config) {
     bool serial2_ok = true;
     
     #ifdef ARDUINO
+    Serial.println("ExternalSerial::init() - About to initialize USB bridge...");
     // On Arduino/Teensy platforms, Serial1 and Serial2 are predefined
     usb_ok = usb_bridge.init(&Serial, config.usb);
+    Serial.println("ExternalSerial::init() - USB bridge initialized");
+    
     #if defined(ARDUINO_TEENSY41) || defined(ARDUINO_TEENSY40)
+    Serial.println("ExternalSerial::init() - About to initialize Serial1 bridge...");
     serial1_ok = serial1_bridge.init(&Serial1, config.serial1);
+    Serial.println("ExternalSerial::init() - Serial1 bridge initialized");
+    
+    Serial.println("ExternalSerial::init() - About to initialize Serial2 bridge...");
     serial2_ok = serial2_bridge.init(&Serial2, config.serial2);
+    Serial.println("ExternalSerial::init() - Serial2 bridge initialized");
     #else
     // For Arduino boards without Serial1/Serial2, skip them
     serial1_ok = !config.serial1.enabled;
@@ -281,8 +329,16 @@ bool ExternalSerial::init(const external_serial_config_t& new_config) {
     serial2_ok = serial2_bridge.init(&Serial2, config.serial2);
     #endif
     
+    #ifdef ARDUINO
+    Serial.println("ExternalSerial::init() - About to setup message bus integration...");
+    #endif
+    
     // Set up message bus integration
     setup_message_bus_integration();
+    
+    #ifdef ARDUINO
+    Serial.println("ExternalSerial::init() - Message bus integration setup complete");
+    #endif
     
     initialized = true;
     
@@ -396,9 +452,13 @@ void ExternalSerial::setup_message_bus_integration() {
     // Set global instance pointer for callback
     g_serial_instance = this;
     
-    // Subscribe to all message bus messages
-    // Note: In a complete implementation, we would subscribe to the message bus
-    // For now, the message bus would need to call our callback function
+    // Set up global broadcast handler to forward ALL messages to serial
+    // This allows external tools to receive all message bus traffic
+    g_message_bus.setGlobalBroadcastHandler(on_internal_message_published);
+    
+    #ifdef ARDUINO
+    Serial.println("ExternalSerial: Set up global broadcast handler for ALL message bus messages");
+    #endif
 }
 
 // Static callback function for message bus integration

@@ -38,6 +38,7 @@ struct external_canbus_stats_t {
 
 // External CAN bus configuration
 struct external_canbus_config_t {
+    bool enabled;                    // Master enable/disable flag
     uint32_t baudrate;
     bool enable_obdii;
     bool enable_custom_messages;
@@ -216,6 +217,7 @@ extern ExternalCanBus g_external_canbus;
 
 // Default configuration
 static const external_canbus_config_t DEFAULT_EXTERNAL_CANBUS_CONFIG = {
+    .enabled = false,                 // Disabled by default
     .baudrate = 500000,
     .enable_obdii = true,
     .enable_custom_messages = true,

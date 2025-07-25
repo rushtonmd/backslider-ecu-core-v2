@@ -173,67 +173,55 @@ static void init_transmission_sensor_array(sensor_definition_t* sensors,
     sensors[2].filter_strength = PADDLE_FILTER_STRENGTH;
     sensors[2].name = "Paddle Downshift";
     
-    // Park switch (I2C GPIO pin 0)
-    sensors[3].pin = 0xFF; // Not used for I2C sensors
-    sensors[3].type = SENSOR_I2C_GPIO;
-    sensors[3].config.i2c_gpio.pin = 0;
-    sensors[3].config.i2c_gpio.use_pullup = 1;
-    sensors[3].config.i2c_gpio.invert_logic = 1;
+    // Park switch (Digital pin 3)
+    sensors[3].pin = PIN_TRANS_PARK;
+    sensors[3].type = SENSOR_DIGITAL_PULLUP;
+    sensors[3].config.digital.invert_logic = 1;
     sensors[3].msg_id = MSG_TRANS_PARK_SWITCH;
     sensors[3].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
     sensors[3].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
     sensors[3].name = "Trans Park Switch";
     
-    // Reverse switch (I2C GPIO pin 1)
-    sensors[4].pin = 0xFF; // Not used for I2C sensors
-    sensors[4].type = SENSOR_I2C_GPIO;
-    sensors[4].config.i2c_gpio.pin = 1;
-    sensors[4].config.i2c_gpio.use_pullup = 1;
-    sensors[4].config.i2c_gpio.invert_logic = 1;
+    // Reverse switch (Digital pin 4)
+    sensors[4].pin = PIN_TRANS_REVERSE;
+    sensors[4].type = SENSOR_DIGITAL_PULLUP;
+    sensors[4].config.digital.invert_logic = 1;
     sensors[4].msg_id = MSG_TRANS_REVERSE_SWITCH;
     sensors[4].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
     sensors[4].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
     sensors[4].name = "Trans Reverse Switch";
     
-    // Neutral switch (I2C GPIO pin 2)
-    sensors[5].pin = 0xFF; // Not used for I2C sensors
-    sensors[5].type = SENSOR_I2C_GPIO;
-    sensors[5].config.i2c_gpio.pin = 2;
-    sensors[5].config.i2c_gpio.use_pullup = 1;
-    sensors[5].config.i2c_gpio.invert_logic = 1;
+    // Neutral switch (Digital pin 5)
+    sensors[5].pin = PIN_TRANS_NEUTRAL;
+    sensors[5].type = SENSOR_DIGITAL_PULLUP;
+    sensors[5].config.digital.invert_logic = 1;
     sensors[5].msg_id = MSG_TRANS_NEUTRAL_SWITCH;
     sensors[5].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
     sensors[5].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
     sensors[5].name = "Trans Neutral Switch";
     
-    // Drive switch (I2C GPIO pin 3)
-    sensors[6].pin = 0xFF; // Not used for I2C sensors
-    sensors[6].type = SENSOR_I2C_GPIO;
-    sensors[6].config.i2c_gpio.pin = 3;
-    sensors[6].config.i2c_gpio.use_pullup = 1;
-    sensors[6].config.i2c_gpio.invert_logic = 1;
+    // Drive switch (Digital pin 6)
+    sensors[6].pin = PIN_TRANS_DRIVE;
+    sensors[6].type = SENSOR_DIGITAL_PULLUP;
+    sensors[6].config.digital.invert_logic = 1;
     sensors[6].msg_id = MSG_TRANS_DRIVE_SWITCH;
     sensors[6].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
     sensors[6].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
     sensors[6].name = "Trans Drive Switch";
     
-    // Second switch (I2C GPIO pin 4)
-    sensors[7].pin = 0xFF; // Not used for I2C sensors
-    sensors[7].type = SENSOR_I2C_GPIO;
-    sensors[7].config.i2c_gpio.pin = 4;
-    sensors[7].config.i2c_gpio.use_pullup = 1;
-    sensors[7].config.i2c_gpio.invert_logic = 1;
+    // Second switch (Digital pin 24)
+    sensors[7].pin = PIN_TRANS_SECOND;
+    sensors[7].type = SENSOR_DIGITAL_PULLUP;
+    sensors[7].config.digital.invert_logic = 1;
     sensors[7].msg_id = MSG_TRANS_SECOND_SWITCH;
     sensors[7].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
     sensors[7].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
     sensors[7].name = "Trans Second Switch";
     
-    // First switch (I2C GPIO pin 5)
-    sensors[8].pin = 0xFF; // Not used for I2C sensors
-    sensors[8].type = SENSOR_I2C_GPIO;
-    sensors[8].config.i2c_gpio.pin = 5;
-    sensors[8].config.i2c_gpio.use_pullup = 1;
-    sensors[8].config.i2c_gpio.invert_logic = 1;
+    // First switch (Digital pin 25)
+    sensors[8].pin = PIN_TRANS_FIRST;
+    sensors[8].type = SENSOR_DIGITAL_PULLUP;
+    sensors[8].config.digital.invert_logic = 1;
     sensors[8].msg_id = MSG_TRANS_FIRST_SWITCH;
     sensors[8].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
     sensors[8].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
@@ -324,11 +312,13 @@ uint8_t transmission_module_init(void) {
     
     // Configure MCP23017 GPIO pins for transmission gear switches
     #ifdef ARDUINO
+    // SKIPPING MCP23017 configuration for debugging (MCP23017 not initialized)
     // Configure pins 0-5 as inputs with pullup for gear selector switches
-    for (uint8_t pin = 0; pin <= 5; pin++) {
-        configure_mcp23017_pin(pin, INPUT_PULLUP);
-    }
-    Serial.println("Transmission: Configured MCP23017 pins 0-5 as gear selector inputs");
+    // for (uint8_t pin = 0; pin <= 5; pin++) {
+    //     configure_mcp23017_pin(pin, INPUT_PULLUP);
+    // }
+    // Serial.println("Transmission: Configured MCP23017 pins 0-5 as gear selector inputs");
+    Serial.println("Transmission: SKIPPING MCP23017 configuration (not initialized)");
     #endif
     
     // TODO: Register outputs with output manager when header conflicts are resolved

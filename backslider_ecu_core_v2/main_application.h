@@ -30,6 +30,7 @@ private:
     uint32_t loop_count;
     uint32_t last_loop_time_us;
     uint32_t last_status_report_ms;
+    bool external_canbus_initialized;
     
     // Core systems (initialized in this order)
     SPIFlashStorageBackend storage_backend;

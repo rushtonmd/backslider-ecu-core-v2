@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "external_serial.h"
+#include "external_canbus.h"
 
 // =============================================================================
 // ECU TYPE DEFINITIONS
@@ -42,12 +43,14 @@ struct I2CDeviceConfig {
     uint32_t frequency;
     bool enabled;
     uint8_t timeout_ms;
+    uint8_t device_number;
 };
 
 struct I2CConfiguration {
     uint32_t bus_frequency;        // 100000, 400000, 1000000
     bool internal_pullups;
     uint8_t timeout_ms;
+    uint8_t number_of_interfaces;
     
     // Device configurations
     I2CDeviceConfig gpio_expander;  // MCP23017
@@ -92,6 +95,7 @@ struct ECUConfiguration {
     I2CConfiguration i2c;
     SPIConfiguration spi;
     external_serial_config_t external_serial;
+    external_canbus_config_t external_canbus;
     
     // Boot behavior
     uint32_t boot_timeout_ms;

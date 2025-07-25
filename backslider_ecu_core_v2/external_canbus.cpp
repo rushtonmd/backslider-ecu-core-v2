@@ -51,6 +51,12 @@ bool ExternalCanBus::init(const external_canbus_config_t& config) {
     
     this->config = config;
     
+    // Check if external CAN bus is enabled
+    if (!config.enabled) {
+        debug_print("ExternalCanBus: Disabled in configuration - skipping initialization");
+        return false;
+    }
+    
     debug_print("ExternalCanBus: Initializing...");
     
     // Initialize cache system

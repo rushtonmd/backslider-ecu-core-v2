@@ -29,6 +29,16 @@ extern MockSerial Serial1; // Additional serial port for external communications
 #if defined(ARDUINO) && !defined(TESTING)
 Adafruit_ADS1015 ads1015;
 Adafruit_MCP23X17 mcp;
+
+// Helper function to get the correct I2C bus based on device number
+TwoWire* getI2CBus(uint8_t device_number) {
+    switch (device_number) {
+        case 0: return &Wire;   // Primary I2C bus
+        case 1: return &Wire;   // TODO: Return Wire1 when available
+        case 2: return &Wire;   // TODO: Return Wire2 when available
+        default: return &Wire;  // Default to primary
+    }
+}
 #endif
 
 MainApplication::MainApplication() : storage_manager(&storage_backend), config_manager(&storage_manager) {
@@ -39,104 +49,168 @@ void MainApplication::init() {
     loop_count = 0;
     last_loop_time_us = 0;
     last_status_report_ms = 0;
+    external_canbus_initialized = false;
     
     #ifdef ARDUINO
     // Initialize serial communication
     Serial.begin(115200);
     Serial.println("=== Backslider ECU Starting ===");
     
-    // Initialize built-in LED for status indication
-    pinMode(LED_BUILTIN, OUTPUT);
-    digitalWrite(LED_BUILTIN, HIGH);  // Turn on during initialization
+    // Note: LED initialization removed to avoid pin conflicts
     #endif
     
     // Initialize message bus (internal messaging only for now)
     Serial.println("Initializing message bus...");
+    Serial.println("  - About to call g_message_bus.init()...");
     g_message_bus.init();  // false = no physical CAN bus yet
+    Serial.println("  - g_message_bus.init() completed");
     
     // Initialize storage manager
     Serial.println("Initializing storage manager...");
+    Serial.println("  - About to call storage_manager.init()...");
     if (storage_manager.init()) {
+        Serial.println("  - Storage manager init() returned true");
         Serial.println("Storage manager initialized successfully");
         
         // Run comprehensive storage diagnostics
+        Serial.println("  - About to run storage diagnostics...");
         storage_manager.run_storage_diagnostics();
+        Serial.println("  - Storage diagnostics completed");
     } else {
+        Serial.println("  - Storage manager init() returned false");
         Serial.println("WARNING: Storage manager initialization failed");
     }
     
     // Initialize configuration manager - MUST BE FIRST after storage
     Serial.println("Initializing configuration manager...");
+    Serial.println("  - About to call config_manager.initialize()...");
     if (!config_manager.initialize()) {
+        Serial.println("  - Config manager initialize() returned false");
         Serial.println("CRITICAL ERROR: Configuration manager initialization failed");
         return;
     }
+    Serial.println("  - Config manager initialize() returned true");
     
     // Get configuration for system initialization
+    Serial.println("  - About to call config_manager.getConfig()...");
     const ECUConfiguration& config = config_manager.getConfig();
     
     #ifdef ARDUINO
-    // Initialize I2C with loaded configuration
-    // Note: Teensy 4.0 uses fixed pins (SDA=18, SCL=19)
-    Serial.print("Initializing I2C: SDA=18, SCL=19");
-    Serial.print(", Freq=");
-    Serial.print(config.i2c.bus_frequency);
-    Serial.println("Hz");
-    
-    Wire.begin();
-    Wire.setClock(config.i2c.bus_frequency);
+    // Initialize I2C buses based on configuration
+    Serial.println("  - About to initialize I2C buses...");
+    if (config.i2c.number_of_interfaces > 0) {
+        Serial.print("Initializing ");
+        Serial.print(config.i2c.number_of_interfaces);
+        Serial.println(" I2C interface(s)...");
+        
+        // Initialize primary I2C bus (Wire) if needed
+        if (config.i2c.number_of_interfaces >= 1) {
+            Serial.println("  Wire (Primary): SDA=18, SCL=19");
+            Wire.begin();
+            Wire.setClock(config.i2c.bus_frequency);
+        }
+        
+        // Initialize secondary I2C bus (Wire1) if needed
+        if (config.i2c.number_of_interfaces >= 2) {
+            Serial.println("  Wire1 (Secondary): SDA=20, SCL=21");
+            // Wire1.begin();  // TODO: Enable when Wire1 is available
+            // Wire1.setClock(config.i2c.bus_frequency);
+        }
+        
+        // Initialize tertiary I2C bus (Wire2) if needed
+        if (config.i2c.number_of_interfaces >= 3) {
+            Serial.println("  Wire2 (Tertiary): SDA=24, SCL=25");
+            // Wire2.begin();  // TODO: Enable when Wire2 is available
+            // Wire2.setClock(config.i2c.bus_frequency);
+        }
+        
+        Serial.println("I2C initialization complete");
+    } else {
+        Serial.println("I2C initialization skipped - no interfaces configured");
+    }
     
     // Initialize ADS1015 ADC if enabled
+    Serial.println("  - About to initialize ADS1015...");
     if (config.i2c.adc.enabled) {
-        Serial.print("Initializing ADS1015 ADC at address 0x");
-        Serial.print(config.i2c.adc.address, HEX);
-        Serial.print(" (freq=");
-        Serial.print(config.i2c.adc.frequency);
-        Serial.println("Hz)");
-        
-        #if defined(ARDUINO) && !defined(TESTING)
-        if (!ads1015.begin(config.i2c.adc.address)) {
-            Serial.println("ERROR: Failed to initialize ADS1015 ADC!");
-            digitalWrite(config.pins.error_led_pin, HIGH);  // Turn on error LED
+        // Validate device number
+        if (config.i2c.adc.device_number >= config.i2c.number_of_interfaces) {
+            Serial.print("ERROR: ADS1015 device_number (");
+            Serial.print(config.i2c.adc.device_number);
+            Serial.print(") exceeds available I2C interfaces (");
+            Serial.print(config.i2c.number_of_interfaces);
+            Serial.println(")");
+            digitalWrite(config.pins.error_led_pin, HIGH);
         } else {
-            Serial.println("ADS1015 ADC initialized successfully");
-            // Configure ADS1015 for single-ended readings
-            ads1015.setGain(GAIN_TWOTHIRDS);  // ±6.144V range
+            Serial.print("Initializing ADS1015 ADC on I2C bus ");
+            Serial.print(config.i2c.adc.device_number);
+            Serial.print(" at address 0x");
+            Serial.print(config.i2c.adc.address, HEX);
+            Serial.print(" (freq=");
+            Serial.print(config.i2c.adc.frequency);
+            Serial.println("Hz)");
+            
+            #if defined(ARDUINO) && !defined(TESTING)
+            // Note: Adafruit libraries currently use Wire by default
+            // TODO: Implement multi-bus support for Adafruit libraries
+            if (!ads1015.begin(config.i2c.adc.address)) {
+                Serial.println("ERROR: Failed to initialize ADS1015 ADC!");
+                digitalWrite(config.pins.error_led_pin, HIGH);  // Turn on error LED
+            } else {
+                Serial.println("ADS1015 ADC initialized successfully");
+                // Configure ADS1015 for single-ended readings
+                ads1015.setGain(GAIN_TWOTHIRDS);  // ±6.144V range
+            }
+            #else
+            Serial.println("ADS1015 ADC initialization skipped (not Arduino)");
+            #endif
         }
-        #else
-        Serial.println("ADS1015 ADC initialization skipped (not Arduino)");
-        #endif
     } else {
         Serial.println("ADS1015 ADC disabled in configuration");
     }
     
     // Initialize MCP23017 GPIO expander if enabled
+    Serial.println("  - About to initialize MCP23017...");
     if (config.i2c.gpio_expander.enabled) {
-        Serial.print("Initializing MCP23017 GPIO expander at address 0x");
-        Serial.print(config.i2c.gpio_expander.address, HEX);
-        Serial.print(" (freq=");
-        Serial.print(config.i2c.gpio_expander.frequency);
-        Serial.println("Hz)");
-        
-        #if defined(ARDUINO) && !defined(TESTING)
-        if (!mcp.begin_I2C(config.i2c.gpio_expander.address)) {
-            Serial.println("ERROR: Failed to initialize MCP23017 GPIO expander!");
-            digitalWrite(config.pins.error_led_pin, HIGH);  // Turn on error LED
+        // Validate device number
+        if (config.i2c.gpio_expander.device_number >= config.i2c.number_of_interfaces) {
+            Serial.print("ERROR: MCP23017 device_number (");
+            Serial.print(config.i2c.gpio_expander.device_number);
+            Serial.print(") exceeds available I2C interfaces (");
+            Serial.print(config.i2c.number_of_interfaces);
+            Serial.println(")");
+            digitalWrite(config.pins.error_led_pin, HIGH);
         } else {
-            Serial.println("MCP23017 GPIO expander initialized successfully");
-            // Configure all pins as inputs with pullup by default
-            for (int i = 0; i < 16; i++) {
-                mcp.pinMode(i, INPUT_PULLUP);
+            Serial.print("Initializing MCP23017 GPIO expander on I2C bus ");
+            Serial.print(config.i2c.gpio_expander.device_number);
+            Serial.print(" at address 0x");
+            Serial.print(config.i2c.gpio_expander.address, HEX);
+            Serial.print(" (freq=");
+            Serial.print(config.i2c.gpio_expander.frequency);
+            Serial.println("Hz)");
+            
+            #if defined(ARDUINO) && !defined(TESTING)
+            // Note: Adafruit libraries currently use Wire by default
+            // TODO: Implement multi-bus support for Adafruit libraries
+            if (!mcp.begin_I2C(config.i2c.gpio_expander.address)) {
+                Serial.println("ERROR: Failed to initialize MCP23017 GPIO expander!");
+                digitalWrite(config.pins.error_led_pin, HIGH);  // Turn on error LED
+            } else {
+                Serial.println("MCP23017 GPIO expander initialized successfully");
+                // Configure all pins as inputs with pullup by default
+                for (int i = 0; i < 16; i++) {
+                    mcp.pinMode(i, INPUT_PULLUP);
+                }
             }
+            #else
+            Serial.println("MCP23017 GPIO expander initialization skipped (not Arduino)");
+            #endif
         }
-        #else
-        Serial.println("MCP23017 GPIO expander initialization skipped (not Arduino)");
-        #endif
     } else {
         Serial.println("MCP23017 GPIO expander disabled in configuration");
     }
     
     // Initialize status LEDs with loaded configuration
+    Serial.println("  - About to initialize LEDs...");
     pinMode(config.pins.status_led_pin, OUTPUT);
     pinMode(config.pins.error_led_pin, OUTPUT);  
     pinMode(config.pins.activity_led_pin, OUTPUT);
@@ -149,10 +223,12 @@ void MainApplication::init() {
     
     // Initialize input manager
     Serial.println("Initializing input manager...");
+    Serial.println("  - About to call input_manager_init()...");
     input_manager_init();
 
     // Initialize output manager (must be before modules that use outputs)
     Serial.println("Initializing output manager...");
+    Serial.println("  - About to call output_manager_init()...");
     uint8_t output_init_result = output_manager_init();
     if (output_init_result) {
         Serial.println("Output manager initialized successfully");
@@ -163,37 +239,54 @@ void MainApplication::init() {
     // Initialize external communications
     Serial.println("Initializing external communications...");
     
-    // External serial communication using ECU configuration
-    if (g_external_serial.init(ECU_TRANSMISSION_CONFIG.external_serial)) {
+    // Test external serial initialization step by step
+    Serial.println("  - About to call g_external_serial.init()...");
+    Serial.println("  - Config: USB=");
+    Serial.print(ECU_TRANSMISSION_CONFIG.external_serial.usb.enabled ? "enabled" : "disabled");
+    Serial.println(", Serial1=");
+    Serial.print(ECU_TRANSMISSION_CONFIG.external_serial.serial1.enabled ? "enabled" : "disabled");
+    Serial.println(", Serial2=");
+    Serial.print(ECU_TRANSMISSION_CONFIG.external_serial.serial2.enabled ? "enabled" : "disabled");
+    Serial.println();
+    
+    bool external_serial_result = g_external_serial.init(ECU_TRANSMISSION_CONFIG.external_serial);
+    
+    if (external_serial_result) {
+        Serial.println("  - External serial init() returned true");
         Serial.println("External serial communication initialized");
-        Serial.print("  USB: ");
-        Serial.println(ECU_TRANSMISSION_CONFIG.external_serial.usb.enabled ? "enabled" : "disabled");
-        Serial.print("  Serial1: ");
-        Serial.println(ECU_TRANSMISSION_CONFIG.external_serial.serial1.enabled ? "enabled" : "disabled");
-        Serial.print("  Serial2: ");
-        Serial.println(ECU_TRANSMISSION_CONFIG.external_serial.serial2.enabled ? "enabled" : "disabled");
     } else {
+        Serial.println("  - External serial init() returned false");
         Serial.println("External serial communication initialization failed");
     }
     
     // External CAN bus for OBD-II and custom devices
-    external_canbus_config_t canbus_config = {
-        .baudrate = 500000,
-        .enable_obdii = true,
-        .enable_custom_messages = true,
-        .can_bus_number = 1,
-        .cache_default_max_age_ms = 1000
-    };
-    
-    if (g_external_canbus.init(canbus_config)) {
-        Serial.println("External CAN bus initialized (OBD-II + custom devices)");
+    if (ECU_TRANSMISSION_CONFIG.external_canbus.enabled) {
+        Serial.println("  - About to initialize external CAN bus...");
+        external_canbus_initialized = g_external_canbus.init(ECU_TRANSMISSION_CONFIG.external_canbus);
+        if (external_canbus_initialized) {
+            Serial.println("  - External CAN bus init() returned true");
+            Serial.println("External CAN bus initialized");
+            Serial.print("  Baudrate: ");
+            Serial.print(ECU_TRANSMISSION_CONFIG.external_canbus.baudrate);
+            Serial.println(" bps");
+            Serial.print("  OBD-II: ");
+            Serial.println(ECU_TRANSMISSION_CONFIG.external_canbus.enable_obdii ? "enabled" : "disabled");
+            Serial.print("  Custom messages: ");
+            Serial.println(ECU_TRANSMISSION_CONFIG.external_canbus.enable_custom_messages ? "enabled" : "disabled");
+        } else {
+            Serial.println("  - External CAN bus init() returned false");
+            Serial.println("WARNING: External CAN bus initialization failed");
+        }
     } else {
-        Serial.println("WARNING: External CAN bus initialization failed");
+        Serial.println("  - External CAN bus disabled in configuration - skipping initialization");
+        external_canbus_initialized = false;
     }
 
     // Initialize transmission module
     Serial.println("Initializing transmission module...");
+    Serial.println("  - About to call transmission_module_init()...");
     uint8_t trans_sensors_registered = transmission_module_init();
+    Serial.println("  - transmission_module_init() completed");
     Serial.print("Registered ");
     Serial.print(trans_sensors_registered);
     Serial.println(" transmission sensors");
@@ -209,9 +302,7 @@ void MainApplication::init() {
     // uint8_t trans_sensors_registered = transmission_sensors_init();
     
     #ifdef ARDUINO
-    // Turn off status LED and turn on activity LED when initialization complete
-    digitalWrite(config.pins.status_led_pin, LOW);      // Status OFF (init complete)
-    digitalWrite(config.pins.activity_led_pin, HIGH);   // Activity ON (running)
+    // Note: LED state changes removed to avoid pin conflicts
     #endif
     
     Serial.println("=== ECU Initialization Complete ===");
@@ -238,29 +329,27 @@ void MainApplication::run() {
     
     // Update external communications (share data with other ECUs and devices)
     g_external_serial.update();
-    g_external_canbus.update();
     
-    // TODO: Add other module updates here as they're developed
-    // fuel_module_update();
-    // ignition_module_update();
+    // Update external CAN bus only if initialization was successful
+    if (external_canbus_initialized) {
+        g_external_canbus.update();
+    }
     
     // Calculate loop timing
     uint32_t loop_end_us = micros();
     last_loop_time_us = loop_end_us - loop_start_us;
     loop_count++;
     
-    // Print status report periodically
+    // Print heartbeat periodically
     uint32_t current_time_ms = millis();
     if (current_time_ms - last_status_report_ms >= 5000) {  // Every 5 seconds
-        printStatusReport();
+        Serial.print("ECU heartbeat - Loop count: ");
+        Serial.println(loop_count);
         last_status_report_ms = current_time_ms;
     }
     
     #ifdef ARDUINO
-    // Heartbeat LED - non-blocking toggle every 1000 loops (no delays)
-    if (loop_count % 1000 == 0) {
-        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));  // Toggle LED state
-    }
+    // Note: Heartbeat LED removed to avoid pin conflicts
     #endif
 }
 

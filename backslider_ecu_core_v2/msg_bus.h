@@ -162,6 +162,11 @@ public:
 
     // Reset subscribers (for testing)
     void resetSubscribers();
+    
+    // Global broadcast callback (called for every message)
+    static MessageHandler global_broadcast_handler;
+    static void setGlobalBroadcastHandler(MessageHandler handler);
+    static void clearGlobalBroadcastHandler();
 
 private:
     // Subscriber management
