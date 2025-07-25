@@ -31,7 +31,7 @@ SerialBridge::SerialBridge() :
     current_message = {};
 }
 
-bool SerialBridge::init(HardwareSerial* port, const serial_port_config_t& port_config) {
+bool SerialBridge::init(void* port, const serial_port_config_t& port_config) {
     if (port == nullptr) {
         return false;
     }
@@ -41,7 +41,15 @@ bool SerialBridge::init(HardwareSerial* port, const serial_port_config_t& port_c
     enabled = config.enabled;
     
     if (enabled) {
-        serial_port->begin(config.baud_rate);
+        // Only call begin() if it's a HardwareSerial (not USB Serial)
+        // USB Serial is already initialized by Arduino framework
+        // Note: We can't use dynamic_cast due to -fno-rtti, so we'll assume
+        // that if the port is not Serial (USB), it's a HardwareSerial
+        #ifdef ARDUINO
+        if (serial_port != &Serial) {
+            static_cast<HardwareSerial*>(serial_port)->begin(config.baud_rate);
+        }
+        #endif
         
         // Reset state
         rx_head = 0;
@@ -93,10 +101,22 @@ void SerialBridge::process_incoming_bytes() {
     if (!serial_port) return;
     
     // Read available bytes into buffer
-    while (serial_port->available() && get_buffer_available_space() > 0) {
-        uint8_t byte = serial_port->read();
+    // In test environment, this will use MockSerial methods
+    // In Arduino environment, this will use real Serial methods
+    #ifdef TESTING
+    MockSerial* mock_serial = static_cast<MockSerial*>(serial_port);
+    while (mock_serial->available() && get_buffer_available_space() > 0) {
+        uint8_t byte = mock_serial->read();
         add_byte_to_buffer(byte);
     }
+    #else
+    // Cast to Stream* for Arduino environment
+    Stream* stream = static_cast<Stream*>(serial_port);
+    while (stream->available() && get_buffer_available_space() > 0) {
+        uint8_t byte = stream->read();
+        add_byte_to_buffer(byte);
+    }
+    #endif
     
     // Process buffered data
     uint8_t byte;
@@ -156,10 +176,31 @@ bool SerialBridge::should_process_message(uint32_t can_id) {
 
 void SerialBridge::send_message_bytes(const CANMessage& msg) {
     // Send raw binary CAN message
+    // In test environment, this will use MockSerial methods
+    // In Arduino environment, this will use real Serial methods
     const uint8_t* data = (const uint8_t*)&msg;
-    serial_port->write(data, sizeof(CANMessage));
-    serial_port->flush(); // Ensure immediate transmission
+    #ifdef TESTING
+    MockSerial* mock_serial = static_cast<MockSerial*>(serial_port);
+    mock_serial->write(data, sizeof(CANMessage));
+    mock_serial->flush(); // Ensure immediate transmission
+    #else
+    // Cast to Stream* for Arduino environment
+    Stream* stream = static_cast<Stream*>(serial_port);
+    stream->write(data, sizeof(CANMessage));
+    stream->flush(); // Ensure immediate transmission
+    #endif
 }
+
+#ifdef TESTING
+std::vector<uint8_t> SerialBridge::get_written_data_for_testing() {
+    // Cast to MockSerial to access the test data
+    MockSerial* mock_serial = static_cast<MockSerial*>(serial_port);
+    if (mock_serial) {
+        return mock_serial->get_written_data();
+    }
+    return std::vector<uint8_t>();
+}
+#endif
 
 void SerialBridge::add_byte_to_buffer(uint8_t byte) {
     uint16_t next_head = (rx_head + 1) % RX_BUFFER_SIZE;

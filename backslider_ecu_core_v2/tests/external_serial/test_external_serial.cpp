@@ -103,7 +103,7 @@ void test_message_sending() {
     assert(bridge.get_messages_sent() == 1);
     
     // Verify binary data was written to serial
-    std::vector<uint8_t> written_data = Serial.get_written_data();
+    std::vector<uint8_t> written_data = bridge.get_written_data_for_testing();
     assert(written_data.size() == sizeof(CANMessage));
     
     // Verify the data matches our message

@@ -105,7 +105,7 @@ public:
     SerialBridge();
     
     // Configuration
-    bool init(HardwareSerial* port, const serial_port_config_t& config);
+    bool init(void* port, const serial_port_config_t& config);
     void shutdown();
     
     // Main update loop
@@ -126,10 +126,15 @@ public:
     
     // Test helper methods (public for testing)
     bool should_process_message(uint32_t can_id);
+    
+    #ifdef TESTING
+    // Test-specific method to get written data
+    std::vector<uint8_t> get_written_data_for_testing();
+    #endif
 
 private:
     // Configuration
-    HardwareSerial* serial_port;
+    void* serial_port;
     serial_port_config_t config;
     bool enabled;
     

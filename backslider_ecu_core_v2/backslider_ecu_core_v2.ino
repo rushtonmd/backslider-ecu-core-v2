@@ -7,6 +7,14 @@ extern MockSerial Serial;
 #endif
 
 #include "main_application.h"
+#include "config_manager.h"
+#include "storage_manager.h"
+#include "spi_flash_storage_backend.h"
+
+// Global instances for modules that need them
+SPIFlashStorageBackend global_storage_backend;
+StorageManager global_storage_manager(&global_storage_backend);
+ConfigManager config_manager(&global_storage_manager);
 
 MainApplication app;
 

@@ -1086,13 +1086,13 @@ void print_i2c_status() {
     const ECUConfiguration& config = config_manager.getConfig();
     
     Serial.println("--- I2C Device Status ---");
-    Serial.print("ADS1015 Enabled: "); Serial.println(config.i2c.ads1015_enabled ? "Yes" : "No");
-    if (config.i2c.ads1015_enabled) {
-        Serial.print("  Address: 0x"); Serial.println(config.i2c.ads1015_address, HEX);
+    Serial.print("ADC Enabled: "); Serial.println(config.i2c.adc.enabled ? "Yes" : "No");
+    if (config.i2c.adc.enabled) {
+        Serial.print("  Address: 0x"); Serial.println(config.i2c.adc.address, HEX);
     }
-    Serial.print("MCP23017 Enabled: "); Serial.println(config.i2c.mcp23017_enabled ? "Yes" : "No");
-    if (config.i2c.mcp23017_enabled) {
-        Serial.print("  Address: 0x"); Serial.println(config.i2c.mcp23017_address, HEX);
+    Serial.print("GPIO Expander Enabled: "); Serial.println(config.i2c.gpio_expander.enabled ? "Yes" : "No");
+    if (config.i2c.gpio_expander.enabled) {
+        Serial.print("  Address: 0x"); Serial.println(config.i2c.gpio_expander.address, HEX);
     }
     Serial.println("-------------------------");
 }

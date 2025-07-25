@@ -22,16 +22,11 @@ extern MockSerial Serial1; // Additional serial port for external communications
 #include "transmission_module.h"
 #include "ecu_config.h"
 
-// I2C device includes (Arduino only)
-#ifdef ARDUINO
-#include <Adafruit_ADS1X15.h>
-#include <Adafruit_MCP23X17.h>
-#endif
-// #include "engine_sensors.h"  // TODO: Create engine_sensors.h when ready
-// #include "transmission_sensors.h"  // TODO: Create transmission_sensors.h when ready
+// TODO: Create engine_sensors.h when ready
+// TODO: Create transmission_sensors.h when ready
 
 // I2C Device Objects
-#ifdef ARDUINO
+#if defined(ARDUINO) && !defined(TESTING)
 Adafruit_ADS1015 ads1015;
 Adafruit_MCP23X17 mcp;
 #endif
@@ -96,6 +91,7 @@ void MainApplication::init() {
         Serial.print(config.i2c.adc.frequency);
         Serial.println("Hz)");
         
+        #if defined(ARDUINO) && !defined(TESTING)
         if (!ads1015.begin(config.i2c.adc.address)) {
             Serial.println("ERROR: Failed to initialize ADS1015 ADC!");
             digitalWrite(config.pins.error_led_pin, HIGH);  // Turn on error LED
@@ -104,6 +100,9 @@ void MainApplication::init() {
             // Configure ADS1015 for single-ended readings
             ads1015.setGain(GAIN_TWOTHIRDS);  // ±6.144V range
         }
+        #else
+        Serial.println("ADS1015 ADC initialization skipped (not Arduino)");
+        #endif
     } else {
         Serial.println("ADS1015 ADC disabled in configuration");
     }
@@ -116,6 +115,7 @@ void MainApplication::init() {
         Serial.print(config.i2c.gpio_expander.frequency);
         Serial.println("Hz)");
         
+        #if defined(ARDUINO) && !defined(TESTING)
         if (!mcp.begin_I2C(config.i2c.gpio_expander.address)) {
             Serial.println("ERROR: Failed to initialize MCP23017 GPIO expander!");
             digitalWrite(config.pins.error_led_pin, HIGH);  // Turn on error LED
@@ -126,6 +126,9 @@ void MainApplication::init() {
                 mcp.pinMode(i, INPUT_PULLUP);
             }
         }
+        #else
+        Serial.println("MCP23017 GPIO expander initialization skipped (not Arduino)");
+        #endif
     } else {
         Serial.println("MCP23017 GPIO expander disabled in configuration");
     }

@@ -393,7 +393,7 @@ bool ExternalCanBusCache::load_obdii_mappings() {
     
     char debug_msg[50];
     snprintf(debug_msg, sizeof(debug_msg), 
-            "Cache: Loaded %d OBD-II mappings", OBDII_CACHE_MAPPINGS_COUNT);
+            "Cache: Loaded %u OBD-II mappings", OBDII_CACHE_MAPPINGS_COUNT);
     debug_print(debug_msg);
     
     return true;
@@ -409,7 +409,7 @@ bool ExternalCanBusCache::load_custom_mappings() {
     
     char debug_msg[50];
     snprintf(debug_msg, sizeof(debug_msg), 
-            "Cache: Loaded %d custom mappings", CUSTOM_CACHE_MAPPINGS_COUNT);
+            "Cache: Loaded %u custom mappings", CUSTOM_CACHE_MAPPINGS_COUNT);
     debug_print(debug_msg);
     
     return true;

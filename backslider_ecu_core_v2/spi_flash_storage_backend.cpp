@@ -9,6 +9,10 @@
 #ifdef TESTING
     #include "../tests/mock_arduino.h"
     extern MockSerial Serial;
+#else
+    #if defined(ARDUINO) && !defined(TESTING)
+        #include <Arduino.h>
+    #endif
 #endif
 
 // =============================================================================

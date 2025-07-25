@@ -256,7 +256,7 @@ bool ExternalCanBus::setup_can_bus() {
     
     char debug_msg[100];
     snprintf(debug_msg, sizeof(debug_msg), 
-            "ExternalCanBus: CAN%d initialized at %d baud", 
+            "ExternalCanBus: CAN%d initialized at %lu baud", 
             config.can_bus_number, config.baudrate);
     debug_print(debug_msg);
     
