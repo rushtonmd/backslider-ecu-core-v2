@@ -678,7 +678,7 @@ static void handle_paddle_upshift(const CANMessage* msg) {
             shift_count++;
             
             #ifdef ARDUINO
-            Serial.println("Upshift paddle pressed");
+            // Serial.println("Upshift paddle pressed");
             #endif
         }
     }
@@ -694,7 +694,7 @@ static void handle_paddle_downshift(const CANMessage* msg) {
             shift_count++;
             
             #ifdef ARDUINO
-            Serial.println("Downshift paddle pressed");
+            // Serial.println("Downshift paddle pressed");
             #endif
         }
     }
@@ -865,8 +865,8 @@ static void update_gear_position(void) {
             set_line_pressure_for_gear(trans_state.current_gear);
             
             #ifdef ARDUINO
-            Serial.print("Gear position changed to: ");
-            Serial.println(transmission_gear_to_string(trans_state.current_gear));
+                    // Serial.print("Gear position changed to: ");
+        // Serial.println(transmission_gear_to_string(trans_state.current_gear));
             #endif
         }
     } else {
@@ -880,9 +880,9 @@ static void update_gear_position(void) {
         set_line_pressure_for_gear(GEAR_NEUTRAL);
         
         #ifdef ARDUINO
-        Serial.print("Invalid gear position - ");
-        Serial.print(active_count);
-        Serial.println(" switches active, defaulting to neutral");
+        // Serial.print("Invalid gear position - ");
+        // Serial.print(active_count);
+        // Serial.println(" switches active, defaulting to neutral");
         #endif
     }
 }
@@ -908,10 +908,10 @@ static void process_shift_requests(void) {
         
         if (shift_successful) {
             #ifdef ARDUINO
-            Serial.print("Executed ");
-            Serial.print(trans_state.shift_request == SHIFT_UP ? "upshift" : "downshift");
-            Serial.print(" to automatic gear ");
-            Serial.println(current_auto_gear);
+                    // Serial.print("Executed ");
+        // Serial.print(trans_state.shift_request == SHIFT_UP ? "upshift" : "downshift");
+        // Serial.print(" to automatic gear ");
+        // Serial.println(current_auto_gear);
             #endif
         } else {
             #ifdef ARDUINO
@@ -968,8 +968,8 @@ static bool execute_upshift(void) {
     // Line pressure remains at 100% for all moving gears
     
     #ifdef ARDUINO
-    Serial.print("Upshift executed: Drive gear ");
-    Serial.println(current_auto_gear);
+            // Serial.print("Upshift executed: Drive gear ");
+        // Serial.println(current_auto_gear);
     #endif
     
     return true;
@@ -990,8 +990,8 @@ static bool execute_downshift(void) {
     // Line pressure remains at 100% for all moving gears
     
     #ifdef ARDUINO
-    Serial.print("Downshift executed: Drive gear ");
-    Serial.println(current_auto_gear);
+            // Serial.print("Downshift executed: Drive gear ");
+        // Serial.println(current_auto_gear);
     #endif
     
     return true;
@@ -1043,14 +1043,14 @@ static void set_shift_solenoid_pattern(uint8_t gear) {
     g_message_bus.publishFloat(MSG_TRANS_LOCKUP_SOL, lockup_state ? 1.0f : 0.0f);
                             
     #ifdef ARDUINO
-    Serial.print("Solenoids - Gear ");
-    Serial.print(gear);
-    Serial.print(": A=");
-    Serial.print(sol_a_state ? "ON" : "OFF");
-    Serial.print(", B=");
-    Serial.print(sol_b_state ? "ON" : "OFF");
-    Serial.print(", Lockup=");
-    Serial.println(lockup_state ? "ON" : "OFF");
+            // Serial.print("Solenoids - Gear ");
+        // Serial.print(gear);
+        // Serial.print(": A=");
+        // Serial.print(sol_a_state ? "ON" : "OFF");
+        // Serial.print(", B=");
+        // Serial.print(sol_b_state ? "ON" : "OFF");
+        // Serial.print(", Lockup=");
+        // Serial.println(lockup_state ? "ON" : "OFF");
     #endif
 }
 
@@ -1071,11 +1071,11 @@ static void set_line_pressure_for_gear(gear_position_t gear) {
     g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent);
                             
     #ifdef ARDUINO
-    Serial.print("Line pressure set for ");
-    Serial.print(transmission_gear_to_string(gear));
-    Serial.print(": ");
-    Serial.print(pressure_percent * 100.0f);
-    Serial.println("%");
+    // Serial.print("Line pressure set for ");
+    // Serial.print(transmission_gear_to_string(gear));
+    // Serial.print(": ");
+    // Serial.print(pressure_percent * 100.0f);
+    // Serial.println("%");
     #endif
 }
 
@@ -1089,9 +1089,9 @@ static void set_line_pressure(float pressure_percent) {
     g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent);
                             
     #ifdef ARDUINO
-    Serial.print("Line pressure manually set to: ");
-    Serial.print(pressure_percent * 100.0f);
-    Serial.println("%");
+            // Serial.print("Line pressure manually set to: ");
+        // Serial.print(pressure_percent * 100.0f);
+        // Serial.println("%");
     #endif
 }
 
@@ -1224,11 +1224,11 @@ static void set_overrun_clutch(overrun_clutch_state_t state) {
     g_message_bus.publishFloat(MSG_TRANS_OVERRUN_SOL, solenoid_power ? 1.0f : 0.0f);
     
     #ifdef ARDUINO
-    Serial.print("Overrun clutch ");
-    Serial.print(transmission_overrun_to_string(state));
-    Serial.print(" (solenoid ");
-    Serial.print(solenoid_power ? "ON-12V" : "OFF-0V");
-    Serial.println(")");
+            // Serial.print("Overrun clutch ");
+        // Serial.print(transmission_overrun_to_string(state));
+        // Serial.print(" (solenoid ");
+        // Serial.print(solenoid_power ? "ON-12V" : "OFF-0V");
+        // Serial.println(")");
     #endif
 }
 
@@ -1246,10 +1246,10 @@ static void update_overrun_clutch_control(void) {
         set_overrun_clutch(desired_state);
         
         #ifdef ARDUINO
-        Serial.print("Overrun clutch state changed: ");
-        Serial.print(transmission_overrun_to_string(previous_state));
-        Serial.print(" → ");
-        Serial.println(transmission_overrun_to_string(desired_state));
+        // Serial.print("Overrun clutch state changed: ");
+        // Serial.print(transmission_overrun_to_string(previous_state));
+        // Serial.print(" → ");
+        // Serial.println(transmission_overrun_to_string(desired_state));
         #else
         // Suppress unused variable warning in non-Arduino builds
         (void)previous_state;

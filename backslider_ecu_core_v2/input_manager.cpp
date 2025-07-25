@@ -494,9 +494,9 @@ static void handle_sensor_error(uint8_t sensor_index) {
         runtime->is_valid = 0;  // Mark sensor as failed
         
         #ifdef ARDUINO
-        Serial.print("InputManager: Sensor '");
-        Serial.print(sensors[sensor_index].name);
-        Serial.println("' marked as failed");
+        // Serial.print("InputManager: Sensor '");
+        // Serial.print(sensors[sensor_index].name);
+        // Serial.println("' marked as failed");
         #endif
     }
 }

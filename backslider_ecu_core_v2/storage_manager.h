@@ -62,6 +62,9 @@ public:
     bool verify_integrity();
     void force_commit_cache();
     
+    // Storage diagnostics
+    void run_storage_diagnostics();
+    
     // Statistics
     uint32_t get_cache_hits() const { return cache_hits; }
     uint32_t get_cache_misses() const { return cache_misses; }

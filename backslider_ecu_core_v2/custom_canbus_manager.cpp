@@ -326,12 +326,12 @@ void CustomCanBusManager::handle_can_message(uint32_t can_id, const uint8_t* dat
     stats.messages_translated++;
     
     #ifdef ARDUINO
-    Serial.print("CustomCanBusManager: CAN 0x");
-    Serial.print(can_id, HEX);
-    Serial.print(" -> MSG 0x");
-    Serial.print(mapping.basic.internal_msg_id, HEX);
-    Serial.print(" = ");
-    Serial.println(value);
+    // Serial.print("CustomCanBusManager: CAN 0x");
+    // Serial.print(can_id, HEX);
+    // Serial.print(" -> MSG 0x");
+    // Serial.print(mapping.basic.internal_msg_id, HEX);
+    // Serial.print(" = ");
+    // Serial.println(value);
     #endif
 }
 

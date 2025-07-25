@@ -338,7 +338,7 @@ void ExternalCanBus::process_outgoing_messages() {
 }
 
 void ExternalCanBus::route_incoming_message(const CAN_message_t& msg) {
-    debug_print_message(msg, "Received");
+    // debug_print_message(msg, "Received");
     
     // Check if it's an OBD-II request
     if (obdii_enabled && is_obdii_message(msg)) {
@@ -430,7 +430,7 @@ bool ExternalCanBus::send_can_message(const CAN_message_t& msg) {
     
     if (success) {
         stats.messages_sent++;
-        debug_print_message(msg, "Sent");
+        // debug_print_message(msg, "Sent");
     } else {
         stats.errors++;
         debug_print("ExternalCanBus: Failed to send message");

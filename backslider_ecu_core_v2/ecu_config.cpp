@@ -132,9 +132,9 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
     
     // External Serial Communication
     .external_serial = {
-        // USB Serial - High-speed communication for tuning software
+        //USB Serial - High-speed communication for tuning software
         .usb = {
-            .enabled = true,
+            .enabled = false,
             .baud_rate = 2000000,  // 2 Mbps for fast parameter access
             .tx_enabled = true,
             .rx_enabled = true
@@ -142,7 +142,7 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
         
         // Serial1 - Dashboard communication
         .serial1 = {
-            .enabled = true,
+            .enabled = false,
             .baud_rate = 1000000,  // 1 Mbps for dashboard data
             .tx_enabled = true,
             .rx_enabled = true

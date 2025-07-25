@@ -58,6 +58,9 @@ void MainApplication::init() {
     Serial.println("Initializing storage manager...");
     if (storage_manager.init()) {
         Serial.println("Storage manager initialized successfully");
+        
+        // Run comprehensive storage diagnostics
+        storage_manager.run_storage_diagnostics();
     } else {
         Serial.println("WARNING: Storage manager initialization failed");
     }

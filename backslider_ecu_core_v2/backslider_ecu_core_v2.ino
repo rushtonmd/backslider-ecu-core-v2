@@ -9,10 +9,11 @@ extern MockSerial Serial;
 #include "main_application.h"
 #include "config_manager.h"
 #include "storage_manager.h"
-#include "spi_flash_storage_backend.h"
+#include "w25q128_storage_backend.h"
+#include "ecu_config.h"
 
 // Global instances for modules that need them
-SPIFlashStorageBackend global_storage_backend;
+W25Q128StorageBackend global_storage_backend(ECU_TRANSMISSION_CONFIG);
 StorageManager global_storage_manager(&global_storage_backend);
 ConfigManager config_manager(&global_storage_manager);
 

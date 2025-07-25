@@ -96,6 +96,14 @@ storage_manager/test_storage_manager: storage_manager/test_storage_manager.cpp .
 storage_manager/test_spi_flash_storage: storage_manager/test_spi_flash_storage.cpp ../spi_flash_storage_backend.cpp $(MOCK_SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $< ../spi_flash_storage_backend.cpp $(MOCK_SOURCES)
 
+# W25Q128 storage tests need w25q128_storage_backend, ecu_config, and mock_arduino
+storage_manager/test_w25q128_storage: storage_manager/test_w25q128_storage.cpp ../w25q128_storage_backend.cpp ../ecu_config.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../w25q128_storage_backend.cpp ../ecu_config.cpp $(MOCK_SOURCES)
+
+# Simple W25Q128 test
+storage_manager/test_w25q128_simple: storage_manager/test_w25q128_simple.cpp ../w25q128_storage_backend.cpp ../ecu_config.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../w25q128_storage_backend.cpp ../ecu_config.cpp $(MOCK_SOURCES)
+
 # Config manager tests need config_manager, storage_manager, spi_flash_storage_backend, ecu_config, msg_bus, and mock_arduino
 config_manager/test_%: config_manager/test_%.cpp ../config_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../ecu_config.cpp ../msg_bus.cpp $(MOCK_SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $< ../config_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../ecu_config.cpp ../msg_bus.cpp $(MOCK_SOURCES)
