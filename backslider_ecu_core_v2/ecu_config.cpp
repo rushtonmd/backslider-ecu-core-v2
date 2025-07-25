@@ -34,8 +34,10 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
     //       Hardware serial ports (Serial1, Serial2) use predefined pins
     
     .pins = {
-
-       
+        // External CAN Bus (built into Teensy 4.1)
+        .can_tx_pin = 0,           // CAN1 TX (built-in)
+        .can_rx_pin = 1,           // CAN1 RX (built-in)
+        
         // Status LEDs - Disabled to avoid pin conflicts
         .status_led_pin = 0xFF,    // Disabled
         .error_led_pin = 0xFF,     // Disabled
@@ -46,14 +48,14 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
         .bus_frequency = 400000,   // 400kHz - good balance of speed and reliability
         .internal_pullups = true,  // Use internal pullups
         .timeout_ms = 100,         // 100ms timeout for I2C operations
-        .number_of_interfaces = 0, // 0 interface for now
+        .number_of_interfaces = 1, // 1 interface for now
         
         // MCP23017 I2C GPIO Expander - 16 GPIO pins
         // Address range: 0x20-0x27 (base 0x20 + D0/D1/D2 jumpers)
         .gpio_expander = {
             .address = 0x20,       // Default address (A0=A1=A2=LOW)
             .frequency = 400000,   // 400kHz
-            .enabled = false,       // Enable GPIO expander
+            .enabled = true,        // Enable GPIO expander
             .timeout_ms = 50,       // 50ms timeout
             .device_number = 1      // 0 for now
         },
@@ -63,7 +65,7 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
         .adc = {
             .address = 0x48,       // Default address (ADDR=GND)
             .frequency = 400000,   // 400kHz
-            .enabled = false,       // Enable ADC
+            .enabled = true,        // Enable ADC
             .timeout_ms = 50,       // 50ms timeout
             .device_number = 1      // 0 for now
         },
