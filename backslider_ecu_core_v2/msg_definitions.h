@@ -336,8 +336,20 @@ typedef struct {
 typedef struct {
     uint8_t operation;          // Operation type (see PARAM_OP_* flags)
     float value;                // Parameter value (4 bytes)
-    uint8_t reserved[3];        // Reserved for future use
+    uint8_t source_channel;     // Which external interface sent request (1 byte)
+    uint8_t request_id;         // Unique request ID for that channel (1 byte)
+    uint8_t reserved[1];        // Future use (1 byte)
 } __attribute__((packed)) parameter_msg_t;
+
+// =============================================================================
+// CHANNEL IDENTIFIERS FOR REQUEST-RESPONSE ROUTING
+// =============================================================================
+
+// Channel IDs for routing parameter requests/responses
+#define CHANNEL_SERIAL_USB    0x01
+#define CHANNEL_SERIAL_1      0x02
+#define CHANNEL_SERIAL_2      0x03
+#define CHANNEL_CAN_BUS       0x04
 
 // Parameter error codes
 #define PARAM_ERROR_SUCCESS             0x00

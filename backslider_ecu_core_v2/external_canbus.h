@@ -7,6 +7,7 @@
 
 #include "msg_definitions.h"
 #include "external_canbus_cache.h"
+#include "request_tracker.h"
 
 #ifdef ARDUINO
     #include <Arduino.h>
@@ -129,6 +130,16 @@ public:
     uint32_t get_error_count() const { return stats.errors; }
     void clear_errors();
     
+    // Request tracking access
+    void remove_pending_request(uint8_t request_id, uint8_t channel) {
+        request_tracker.remove_request(request_id, channel);
+    }
+    
+    // Message bus integration
+    void setup_message_bus_integration();
+    void on_message_bus_message(const CANMessage* msg);
+    static void on_internal_message_published(const CANMessage* msg);
+    
     // =========================================================================
     // TESTING INTERFACE
     // =========================================================================
@@ -178,6 +189,9 @@ private:
     ExternalCanBusCache* cache;
     OBDIIHandler* obdii_handler;
     CustomMessageHandler* custom_handler;
+    
+    // Request tracking for parameter routing
+    RequestTracker request_tracker;
     
     // =========================================================================
     // PRIVATE METHODS

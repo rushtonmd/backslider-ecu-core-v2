@@ -21,6 +21,7 @@ extern MockSerial Serial1; // Additional serial port for external communications
 #include "sensor_calibration.h"
 #include "transmission_module.h"
 #include "ecu_config.h"
+#include "parameter_registry.h"
 
 // TODO: Create engine_sensors.h when ready
 // TODO: Create transmission_sensors.h when ready
@@ -64,6 +65,11 @@ void MainApplication::init() {
     Serial.println("  - About to call g_message_bus.init()...");
     g_message_bus.init();  // false = no physical CAN bus yet
     Serial.println("  - g_message_bus.init() completed");
+    
+    // Set up parameter registry as global broadcast handler for parameter requests
+    Serial.println("Setting up parameter registry...");
+    g_message_bus.setGlobalBroadcastHandler(ParameterRegistry::handle_parameter_request);
+    Serial.println("  - Parameter registry set as global broadcast handler");
     
     // Initialize storage manager
     Serial.println("Initializing storage manager...");

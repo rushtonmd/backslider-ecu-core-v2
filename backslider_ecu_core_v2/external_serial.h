@@ -67,6 +67,7 @@
 #define EXTERNAL_SERIAL_H
 
 #include "msg_definitions.h"
+#include "request_tracker.h"
 
 #ifdef ARDUINO
     #include <Arduino.h>
@@ -127,6 +128,15 @@ public:
     // Test helper methods (public for testing)
     bool should_process_message(uint32_t can_id);
     
+    // Channel configuration
+    void set_channel_id(uint8_t id) { channel_id = id; }
+    uint8_t get_channel_id() const { return channel_id; }
+    
+    // Request tracking access
+    void remove_pending_request(uint8_t request_id, uint8_t channel) {
+        request_tracker.remove_request(request_id, channel);
+    }
+    
     #ifdef TESTING
     // Test-specific method to get written data
     std::vector<uint8_t> get_written_data_for_testing();
@@ -154,6 +164,10 @@ private:
     uint32_t messages_received;
     uint32_t parse_errors;
     uint32_t buffer_overflows;
+    
+    // Request tracking for parameter routing
+    RequestTracker request_tracker;
+    uint8_t channel_id;
     
     // Buffer management
     void add_byte_to_buffer(uint8_t byte);

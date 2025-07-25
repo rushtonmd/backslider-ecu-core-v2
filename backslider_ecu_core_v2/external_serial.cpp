@@ -3,6 +3,7 @@
 
 #include "external_serial.h"
 #include "msg_bus.h"
+#include "parameter_helpers.h"
 
 // Global instance
 ExternalSerial g_external_serial;
@@ -24,7 +25,8 @@ SerialBridge::SerialBridge() :
     messages_sent(0),
     messages_received(0),
     parse_errors(0),
-    buffer_overflows(0)
+    buffer_overflows(0),
+    channel_id(0)
 {
     config = {false, 115200, true, true};
     memset(rx_buffer, 0, RX_BUFFER_SIZE);
@@ -186,6 +188,23 @@ void SerialBridge::process_complete_message() {
         return;
     }
     
+    // Check if this is a parameter message and add routing metadata
+    if (current_message.len == sizeof(parameter_msg_t)) {
+        parameter_msg_t* param = (parameter_msg_t*)current_message.buf;
+        
+        // Only add routing for read/write requests (not responses)
+        if (param->operation == PARAM_OP_READ_REQUEST || 
+            param->operation == PARAM_OP_WRITE_REQUEST) {
+            
+            // Add routing metadata
+            param->source_channel = channel_id;
+            param->request_id = request_tracker.get_next_request_id();
+            
+            // Track this request
+            request_tracker.add_request(channel_id, current_message.id);
+        }
+    }
+    
     // Publish to internal message bus
     extern MessageBus g_message_bus;
     g_message_bus.publish(current_message.id, current_message.buf, current_message.len);
@@ -333,6 +352,11 @@ bool ExternalSerial::init(const external_serial_config_t& new_config) {
     Serial.println("ExternalSerial::init() - About to setup message bus integration...");
     #endif
     
+    // Set up channel IDs for request tracking
+    usb_bridge.set_channel_id(CHANNEL_SERIAL_USB);
+    serial1_bridge.set_channel_id(CHANNEL_SERIAL_1);
+    serial2_bridge.set_channel_id(CHANNEL_SERIAL_2);
+    
     // Set up message bus integration
     setup_message_bus_integration();
     
@@ -404,7 +428,48 @@ serial_port_config_t ExternalSerial::get_port_config(int port_index) const {
 void ExternalSerial::on_message_bus_message(const CANMessage* msg) {
     if (!initialized || msg == nullptr) return;
     
-    // Send message to all enabled serial ports
+    // Check if this is a parameter response message
+    if (msg->len == sizeof(parameter_msg_t)) {
+        parameter_msg_t* param = (parameter_msg_t*)msg->buf;
+        
+        // Only filter parameter responses (not broadcasts or errors)
+        if (param->operation == PARAM_OP_READ_RESPONSE || 
+            param->operation == PARAM_OP_WRITE_ACK) {
+            
+            // Route response only to the requesting channel
+            if (param->source_channel == CHANNEL_SERIAL_USB && usb_bridge.is_enabled()) {
+                // Strip routing info before sending to external tool
+                CANMessage external_response = *msg;
+                strip_routing_metadata(&external_response);
+                usb_bridge.send_message(external_response);
+                
+                // Remove from request tracker
+                usb_bridge.remove_pending_request(param->request_id, param->source_channel);
+            }
+            else if (param->source_channel == CHANNEL_SERIAL_1 && serial1_bridge.is_enabled()) {
+                // Strip routing info before sending to external tool
+                CANMessage external_response = *msg;
+                strip_routing_metadata(&external_response);
+                serial1_bridge.send_message(external_response);
+                
+                // Remove from request tracker
+                serial1_bridge.remove_pending_request(param->request_id, param->source_channel);
+            }
+            else if (param->source_channel == CHANNEL_SERIAL_2 && serial2_bridge.is_enabled()) {
+                // Strip routing info before sending to external tool
+                CANMessage external_response = *msg;
+                strip_routing_metadata(&external_response);
+                serial2_bridge.send_message(external_response);
+                
+                // Remove from request tracker
+                serial2_bridge.remove_pending_request(param->request_id, param->source_channel);
+            }
+            
+            return; // Don't broadcast parameter responses
+        }
+    }
+    
+    // For non-parameter messages or parameter broadcasts, send to all enabled ports
     if (usb_bridge.is_enabled()) {
         usb_bridge.send_message(*msg);
     }

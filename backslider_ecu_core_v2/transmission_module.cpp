@@ -26,6 +26,7 @@
 #include "input_manager.h"
 #include "msg_bus.h"
 #include "parameter_helpers.h"
+#include "parameter_registry.h"
 #include "thermistor_table_generator.h"
 #include "custom_canbus_manager.h"
 
@@ -258,7 +259,6 @@ static void handle_gear_position_switches(const CANMessage* msg);
 static void handle_throttle_position(const CANMessage* msg);
 static void handle_vehicle_speed(const CANMessage* msg);
 static void handle_brake_pedal(const CANMessage* msg);
-static void handle_transmission_parameter_request(const CANMessage* msg);
 static void update_gear_position(void);
 static void process_shift_requests(void);
 static void publish_transmission_state(void);
@@ -331,6 +331,30 @@ uint8_t transmission_module_init(void) {
     
     // Subscribe to transmission messages
     subscribe_to_transmission_messages();
+    
+    // Register transmission parameters with the parameter registry
+    ParameterRegistry::register_parameter(MSG_TRANS_CURRENT_GEAR, 
+                                        []() -> float { return (float)trans_state.current_gear; }, 
+                                        nullptr, "Current Gear");
+    ParameterRegistry::register_parameter(MSG_TRANS_SHIFT_REQUEST, 
+                                        []() -> float { return (float)trans_state.shift_request; }, 
+                                        nullptr, "Shift Request");
+    ParameterRegistry::register_parameter(MSG_TRANS_OVERRUN_STATE, 
+                                        []() -> float { return (float)trans_state.overrun_state; }, 
+                                        nullptr, "Overrun State");
+    ParameterRegistry::register_parameter(MSG_TRANS_STATE_VALID, 
+                                        []() -> float { return trans_state.valid_gear_position ? 1.0f : 0.0f; }, 
+                                        nullptr, "State Valid");
+    ParameterRegistry::register_parameter(MSG_TRANS_SHIFT_SOL_A, 
+                                        get_shift_solenoid_a_state, nullptr, "Shift Solenoid A");
+    ParameterRegistry::register_parameter(MSG_TRANS_SHIFT_SOL_B, 
+                                        get_shift_solenoid_b_state, nullptr, "Shift Solenoid B");
+    ParameterRegistry::register_parameter(MSG_TRANS_LOCKUP_SOL, 
+                                        get_lockup_solenoid_state, nullptr, "Lockup Solenoid");
+    ParameterRegistry::register_parameter(MSG_TRANS_PRESSURE_SOL, 
+                                        get_pressure_solenoid_state, nullptr, "Pressure Solenoid");
+    ParameterRegistry::register_parameter(MSG_TRANS_OVERRUN_SOL, 
+                                        get_overrun_solenoid_state, nullptr, "Overrun Solenoid");
     
     // Initialize state
     trans_state.current_gear = GEAR_UNKNOWN;
@@ -627,16 +651,9 @@ static void subscribe_to_transmission_messages(void) {
     g_message_bus.subscribe(MSG_VEHICLE_SPEED, handle_vehicle_speed);
     g_message_bus.subscribe(MSG_BRAKE_PEDAL, handle_brake_pedal);
     
-    // Subscribe to parameter requests for transmission status
-    g_message_bus.subscribe(MSG_TRANS_CURRENT_GEAR, handle_transmission_parameter_request);
-    g_message_bus.subscribe(MSG_TRANS_SHIFT_REQUEST, handle_transmission_parameter_request);
-    g_message_bus.subscribe(MSG_TRANS_OVERRUN_STATE, handle_transmission_parameter_request);
-    g_message_bus.subscribe(MSG_TRANS_STATE_VALID, handle_transmission_parameter_request);
-    g_message_bus.subscribe(MSG_TRANS_SHIFT_SOL_A, handle_transmission_parameter_request);
-    g_message_bus.subscribe(MSG_TRANS_SHIFT_SOL_B, handle_transmission_parameter_request);
-    g_message_bus.subscribe(MSG_TRANS_LOCKUP_SOL, handle_transmission_parameter_request);
-    g_message_bus.subscribe(MSG_TRANS_PRESSURE_SOL, handle_transmission_parameter_request);
-    g_message_bus.subscribe(MSG_TRANS_OVERRUN_SOL, handle_transmission_parameter_request);
+    // Subscribe to parameter requests for transmission status (handled by parameter registry)
+    // Note: Individual parameter subscriptions are no longer needed as the parameter registry
+    // handles all parameter requests centrally
 }
 
 static void handle_trans_fluid_temp(const CANMessage* msg) {
@@ -714,67 +731,8 @@ static void handle_gear_position_switches(const CANMessage* msg) {
 // PARAMETER REQUEST HANDLER
 // =============================================================================
 
-static void handle_transmission_parameter_request(const CANMessage* msg) {
-    // Validate parameter message
-    if (!is_valid_parameter_message(msg)) {
-        return;
-    }
-    
-    parameter_msg_t* param = get_parameter_msg(msg);
-    
-    // Only handle read requests for transmission parameters (read-only)
-    if (param->operation == PARAM_OP_READ_REQUEST) {
-        float current_value = 0.0f;
-        
-        // Get current value based on parameter ID
-        switch (msg->id) {
-            case MSG_TRANS_CURRENT_GEAR:
-                current_value = (float)trans_state.current_gear;
-                break;
-            case MSG_TRANS_SHIFT_REQUEST:
-                current_value = (float)trans_state.shift_request;
-                break;
-            case MSG_TRANS_OVERRUN_STATE:
-                current_value = (float)trans_state.overrun_state;
-                break;
-            case MSG_TRANS_STATE_VALID:
-                current_value = trans_state.valid_gear_position ? 1.0f : 0.0f;
-                break;
-            case MSG_TRANS_SHIFT_SOL_A:
-                current_value = (get_shift_solenoid_a_state() > 0.5f) ? 1.0f : 0.0f;
-                break;
-            case MSG_TRANS_SHIFT_SOL_B:
-                current_value = (get_shift_solenoid_b_state() > 0.5f) ? 1.0f : 0.0f;
-                break;
-            case MSG_TRANS_LOCKUP_SOL:
-                current_value = (get_lockup_solenoid_state() > 0.5f) ? 1.0f : 0.0f;
-                break;
-            case MSG_TRANS_PRESSURE_SOL:
-                current_value = get_pressure_solenoid_state();
-                break;
-            case MSG_TRANS_OVERRUN_SOL:
-                current_value = (get_overrun_solenoid_state() > 0.5f) ? 1.0f : 0.0f;
-                break;
-            default:
-                // Unknown parameter - send error
-                send_parameter_error(msg->id, PARAM_OP_READ_REQUEST, 
-                                   PARAM_ERROR_INVALID_OPERATION, 0.0f);
-                return;
-        }
-        
-        // Send response with current value
-        send_parameter_response(msg->id, PARAM_OP_READ_RESPONSE, current_value);
-        
-    } else if (param->operation == PARAM_OP_WRITE_REQUEST) {
-        // Transmission parameters are read-only
-        send_parameter_error(msg->id, PARAM_OP_WRITE_REQUEST, 
-                           PARAM_ERROR_READ_ONLY, param->value);
-    } else {
-        // Invalid operation
-        send_parameter_error(msg->id, param->operation, 
-                           PARAM_ERROR_INVALID_OPERATION, param->value);
-    }
-}
+// Parameter request handling is now done by the parameter registry
+// This function is no longer needed as parameters are registered centrally
 
 // =============================================================================
 // EXTERNAL DATA HELPER FUNCTIONS (MESSAGE BUS WITH TIMEOUT)

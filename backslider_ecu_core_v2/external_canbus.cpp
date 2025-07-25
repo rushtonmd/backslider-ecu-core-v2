@@ -15,6 +15,9 @@
 // Global external CAN bus instance
 ExternalCanBus g_external_canbus;
 
+// Static pointer for message bus callback (since callbacks can't be member functions)
+static ExternalCanBus* g_canbus_instance = nullptr;
+
 // ============================================================================
 // CONSTRUCTOR AND INITIALIZATION
 // ============================================================================
@@ -98,6 +101,9 @@ bool ExternalCanBus::init(const external_canbus_config_t& config) {
         shutdown();
         return false;
     }
+    
+    // Set up message bus integration
+    setup_message_bus_integration();
     
     // Reset statistics
     reset_statistics();
@@ -401,8 +407,25 @@ void ExternalCanBus::route_parameter_message(const CAN_message_t& msg) {
     internal_msg.len = msg.len;
     memcpy(internal_msg.buf, msg.buf, msg.len);
     
+    // Check if this is a parameter request and add routing metadata
+    if (msg.len == sizeof(parameter_msg_t)) {
+        parameter_msg_t* param = (parameter_msg_t*)internal_msg.buf;
+        
+        // Only add routing for read/write requests (not responses)
+        if (param->operation == PARAM_OP_READ_REQUEST || 
+            param->operation == PARAM_OP_WRITE_REQUEST) {
+            
+            // Add routing metadata
+            param->source_channel = CHANNEL_CAN_BUS;
+            param->request_id = request_tracker.get_next_request_id();
+            
+            // Track this request
+            request_tracker.add_request(CHANNEL_CAN_BUS, msg.id);
+        }
+    }
+    
     // Publish to internal message bus
-    g_message_bus.publish(msg.id, msg.buf, msg.len);
+    g_message_bus.publish(msg.id, internal_msg.buf, internal_msg.len);
     
     debug_print("ExternalCanBus: Parameter message routed to internal message bus");
 }
@@ -741,3 +764,65 @@ void ExternalCanBus::simulate_external_device_request(uint32_t external_key) {
     }
 }
 #endif
+
+// ============================================================================
+// MESSAGE BUS INTEGRATION
+// ============================================================================
+
+void ExternalCanBus::setup_message_bus_integration() {
+    // Set global instance pointer for callback
+    g_canbus_instance = this;
+    
+    // Set up global broadcast handler to forward parameter responses to CAN bus
+    extern MessageBus g_message_bus;
+    g_message_bus.setGlobalBroadcastHandler(on_internal_message_published);
+    
+    debug_print("ExternalCanBus: Set up global broadcast handler for parameter responses");
+}
+
+void ExternalCanBus::on_message_bus_message(const CANMessage* msg) {
+    if (!initialized || msg == nullptr) return;
+    
+    // Check if this is a parameter response message
+    if (msg->len == sizeof(parameter_msg_t)) {
+        parameter_msg_t* param = (parameter_msg_t*)msg->buf;
+        
+        // Only filter parameter responses (not broadcasts or errors)
+        if (param->operation == PARAM_OP_READ_RESPONSE || 
+            param->operation == PARAM_OP_WRITE_ACK) {
+            
+            // Route response only to the requesting channel
+            if (param->source_channel == CHANNEL_CAN_BUS) {
+                // Strip routing info before sending to external tool
+                CANMessage external_response = *msg;
+                strip_routing_metadata(&external_response);
+                
+                // Convert to CAN_message_t and send
+                CAN_message_t can_msg;
+                can_msg.id = external_response.id;
+                can_msg.len = external_response.len;
+                memcpy(can_msg.buf, external_response.buf, external_response.len);
+                send_can_message(can_msg);
+                
+                // Remove from request tracker
+                remove_pending_request(param->request_id, param->source_channel);
+            }
+            
+            return; // Don't broadcast parameter responses
+        }
+    }
+    
+    // For non-parameter messages or parameter broadcasts, send normally
+    CAN_message_t can_msg;
+    can_msg.id = msg->id;
+    can_msg.len = msg->len;
+    memcpy(can_msg.buf, msg->buf, msg->len);
+    send_can_message(can_msg);
+}
+
+// Static callback function for message bus integration
+void ExternalCanBus::on_internal_message_published(const CANMessage* msg) {
+    if (g_canbus_instance && g_canbus_instance->initialized) {
+        g_canbus_instance->on_message_bus_message(msg);
+    }
+}
