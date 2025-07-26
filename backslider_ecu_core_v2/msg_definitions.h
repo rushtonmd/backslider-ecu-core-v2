@@ -160,6 +160,7 @@
 #define MSG_TRANS_CURRENT_GEAR  MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x01))
 #define MSG_TRANS_SHIFT_REQUEST MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x02))
 #define MSG_TRANS_STATE_VALID   MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x03))
+#define MSG_TRANS_DRIVE_GEAR    MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x04))
 #define MSG_TRANS_OVERRUN_STATE MAKE_EXTENDED_CAN_ID(ECU_BASE_PRIMARY, SUBSYSTEM_TRANSMISSION, CONTROL_ID(0x05))
 
 // Transmission output controls
@@ -358,6 +359,7 @@ typedef struct {
 #define PARAM_ERROR_INVALID_OPERATION   0x03    // Invalid operation for this parameter
 #define PARAM_ERROR_SYSTEM_BUSY         0x04    // System too busy to process
 #define PARAM_ERROR_PERMISSION_DENIED   0x05    // Insufficient permissions
+#define PARAM_ERROR_WRITE_FAILED        0x06    // Write operation failed
 
 // Parameter error message
 typedef struct {
@@ -475,9 +477,23 @@ inline void create_extended_can_message(CANMessage* msg, uint32_t extended_id,
         memcpy(msg->buf, data, length);
     }
     #ifdef ARDUINO
-    msg->timestamp = micros();
+    // FlexCAN timestamp is 16-bit, so we need to truncate micros() to 16 bits
+    msg->timestamp = (uint16_t)(micros() & 0xFFFF);
     msg->flags.extended = 1;
     msg->flags.remote = 0;
+    
+    // Debug output for timestamp (disabled to reduce serial clutter)
+    /*
+    static uint32_t last_timestamp_debug = 0;
+    uint32_t now = millis();
+    if (now - last_timestamp_debug >= 5000) {
+        Serial.print("DEBUG: create_extended_can_message - timestamp set to: ");
+        Serial.print(msg->timestamp);
+        Serial.print(" (micros truncated to 16-bit)");
+        Serial.println();
+        last_timestamp_debug = now;
+    }
+    */
     #else
     msg->timestamp = 0;
     msg->flags.extended = 1;

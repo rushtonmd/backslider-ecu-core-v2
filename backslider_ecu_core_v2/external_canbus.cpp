@@ -773,11 +773,11 @@ void ExternalCanBus::setup_message_bus_integration() {
     // Set global instance pointer for callback
     g_canbus_instance = this;
     
-    // Set up global broadcast handler to forward parameter responses to CAN bus
-    extern MessageBus g_message_bus;
-    g_message_bus.setGlobalBroadcastHandler(on_internal_message_published);
+    // REMOVED: Don't override ParameterRegistry as global broadcast handler
+    // The ParameterRegistry should handle parameter requests, and we'll handle responses separately
+    // OLD: g_message_bus.setGlobalBroadcastHandler(on_internal_message_published);
     
-    debug_print("ExternalCanBus: Set up global broadcast handler for parameter responses");
+    debug_print("ExternalCanBus: Set up message bus integration (no global broadcast override)");
 }
 
 void ExternalCanBus::on_message_bus_message(const CANMessage* msg) {

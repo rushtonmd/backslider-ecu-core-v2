@@ -66,15 +66,56 @@ ParameterHandler* ParameterRegistry::find_handler(uint32_t param_id) {
 // =============================================================================
 
 void ParameterRegistry::handle_parameter_request(const CANMessage* msg) {
+    if (msg == nullptr) return;
+    
+    // Only process messages that are actually parameter messages
     if (!is_valid_parameter_message(msg)) {
+        // Not a parameter message, silently ignore it
         return;
     }
     
+    #ifdef ARDUINO
+    Serial.print("ParameterRegistry: handle_parameter_request called for CAN ID 0x");
+    Serial.println(msg->id, HEX);
+    #endif
+    
     parameter_msg_t* param = get_parameter_msg(msg);
+    
+    #ifdef ARDUINO
+    Serial.print("ParameterRegistry: Parameter message - operation=");
+    Serial.print(param->operation);
+    Serial.print(", value=");
+    Serial.print(param->value);
+    Serial.print(", channel=");
+    Serial.print(param->source_channel);
+    Serial.print(", request_id=");
+    Serial.println(param->request_id);
+    #endif
+    
+    // Only process read/write requests, not responses
+    if (param->operation != PARAM_OP_READ_REQUEST && param->operation != PARAM_OP_WRITE_REQUEST) {
+        #ifdef ARDUINO
+        Serial.println("ParameterRegistry: Not a read/write request, ignoring");
+        #endif
+        return;
+    }
+    
     requests_processed++;
     
     // Find handler for this parameter
     ParameterHandler* handler = find_handler(msg->id);
+    
+    #ifdef ARDUINO
+    if (handler) {
+        Serial.print("ParameterRegistry: Found handler for parameter 0x");
+        Serial.print(msg->id, HEX);
+        Serial.print(" - ");
+        Serial.println(handler->description);
+    } else {
+        Serial.print("ParameterRegistry: No handler found for parameter 0x");
+        Serial.println(msg->id, HEX);
+    }
+    #endif
     
     if (!handler) {
         send_parameter_error_routed(msg->id, param->operation, 
@@ -87,12 +128,25 @@ void ParameterRegistry::handle_parameter_request(const CANMessage* msg) {
     switch (param->operation) {
         case PARAM_OP_READ_REQUEST:
             read_requests++;
+            #ifdef ARDUINO
+            Serial.println("ParameterRegistry: Processing READ_REQUEST");
+            #endif
             if (handler->read_handler) {
                 float value = handler->read_handler();
+                #ifdef ARDUINO
+                Serial.print("ParameterRegistry: Read handler returned value: ");
+                Serial.println(value);
+                #endif
                 send_parameter_response_routed(msg->id, PARAM_OP_READ_RESPONSE, 
                                              value, param->source_channel, 
                                              param->request_id);
+                #ifdef ARDUINO
+                Serial.println("ParameterRegistry: READ_RESPONSE sent");
+                #endif
             } else {
+                #ifdef ARDUINO
+                Serial.println("ParameterRegistry: No read handler available");
+                #endif
                 send_parameter_error_routed(msg->id, param->operation, 
                                           PARAM_ERROR_READ_ONLY, param->value,
                                           param->source_channel, param->request_id);

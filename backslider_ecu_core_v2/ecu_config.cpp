@@ -35,8 +35,8 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
     
     .pins = {
         // External CAN Bus (built into Teensy 4.1)
-        .can_tx_pin = 0,           // CAN1 TX (built-in)
-        .can_rx_pin = 1,           // CAN1 RX (built-in)
+        .can_tx_pin = 1,           // CAN1 TX (built-in)
+        .can_rx_pin = 0,           // CAN1 RX (built-in)
         
         // Status LEDs - Disabled to avoid pin conflicts
         .status_led_pin = 0xFF,    // Disabled

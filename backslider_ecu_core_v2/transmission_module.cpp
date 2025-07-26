@@ -29,6 +29,7 @@
 #include "parameter_registry.h"
 #include "thermistor_table_generator.h"
 #include "custom_canbus_manager.h"
+#include "external_message_broadcasting.h"
 
 // Forward declarations to avoid header conflicts
 typedef struct output_definition_t output_definition_t;
@@ -67,7 +68,7 @@ extern CustomCanBusManager g_custom_canbus_manager;
 #define TRANS_SOLENOID_DEFAULT_DUTY 0.0f    // OFF (safe for all digital solenoids)
 
 // Number of sensors and outputs
-#define TRANSMISSION_SENSOR_COUNT 9   // 1 thermistor + 2 paddles + 6 gear switches
+#define TRANSMISSION_SENSOR_COUNT 10  // 1 thermistor + 2 paddles + 6 gear switches + 1 vehicle speed
 #define TRANSMISSION_OUTPUT_COUNT 5   // 5 solenoids (A, B, Overrun, Pressure, Lockup)
 
 // =============================================================================
@@ -227,6 +228,20 @@ static void init_transmission_sensor_array(sensor_definition_t* sensors,
     sensors[8].update_interval_us = GEAR_SWITCH_UPDATE_INTERVAL_US;
     sensors[8].filter_strength = GEAR_SWITCH_FILTER_STRENGTH;
     sensors[8].name = "Trans First Switch";
+
+    // Vehicle speed sensor (Hall effect frequency sensor on pin 6)
+    sensors[9].pin = PIN_VEHICLE_SPEED;
+    sensors[9].type = SENSOR_FREQUENCY_COUNTER;
+    sensors[9].config.frequency.pulses_per_unit = 4;              // 4 pulses per revolution (typical VSS)
+    sensors[9].config.frequency.scaling_factor = 0.01f;          // Scale to MPH/KPH
+    sensors[9].config.frequency.timeout_us = 2000000;            // 2 second timeout (vehicle stopped)
+    sensors[9].config.frequency.message_update_rate_hz = 1;      // 1Hz message rate for debugging
+    sensors[9].config.frequency.use_interrupts = 1;             // Use high-speed interrupts
+    sensors[9].config.frequency.trigger_edge = 0;               // Rising edge (FREQ_EDGE_RISING = 0)
+    sensors[9].msg_id = MSG_VEHICLE_SPEED;
+    sensors[9].update_interval_us = 1000000;                     // 1Hz = 1000ms update
+    sensors[9].filter_strength = 0;                             // No filtering for speed sensor
+    sensors[9].name = "Vehicle Speed";
 }
 
 // TODO: Temporarily commented out due to header conflicts between 
@@ -308,7 +323,27 @@ uint8_t transmission_module_init(void) {
     // init_transmission_output_array(TRANSMISSION_OUTPUTS);
     
     // Register all transmission sensors with the input manager
-    uint8_t registered_sensors = input_manager_register_sensors(TRANSMISSION_SENSORS, TRANSMISSION_SENSOR_COUNT);
+    uint8_t trans_sensors_registered = input_manager_register_sensors(TRANSMISSION_SENSORS, TRANSMISSION_SENSOR_COUNT);
+    
+    #ifdef ARDUINO
+    Serial.print("Transmission: Registered ");
+    Serial.print(trans_sensors_registered);
+    Serial.print(" sensors out of ");
+    Serial.print(TRANSMISSION_SENSOR_COUNT);
+    Serial.println(" requested");
+    
+    // Debug: Show details of vehicle speed sensor (sensor #9)
+    if (trans_sensors_registered >= 10) {
+            // Serial.print("DEBUG: Vehicle speed sensor registered - pin ");
+    // Serial.print(TRANSMISSION_SENSORS[9].pin);
+    // Serial.print(", type ");
+    // Serial.print(TRANSMISSION_SENSORS[9].type);
+    // Serial.print(", msg_id 0x");
+    // Serial.println(TRANSMISSION_SENSORS[9].msg_id, HEX);
+    } else {
+        Serial.println("WARNING: Vehicle speed sensor may not have been registered!");
+    }
+    #endif
     
     // Configure MCP23017 GPIO pins for transmission gear switches
     #ifdef ARDUINO
@@ -336,9 +371,15 @@ uint8_t transmission_module_init(void) {
     ParameterRegistry::register_parameter(MSG_TRANS_CURRENT_GEAR, 
                                         []() -> float { return (float)trans_state.current_gear; }, 
                                         nullptr, "Current Gear");
-    ParameterRegistry::register_parameter(MSG_TRANS_SHIFT_REQUEST, 
-                                        []() -> float { return (float)trans_state.shift_request; }, 
-                                        nullptr, "Shift Request");
+    ParameterRegistry::register_parameter(MSG_TRANS_DRIVE_GEAR,
+                                        []() -> float { return (float)current_auto_gear; }, 
+                                        nullptr, "Drive Gear");
+    ParameterRegistry::register_parameter(MSG_VEHICLE_SPEED,
+                                        []() -> float { 
+                                            // Return actual vehicle speed from cached value
+                                            return get_vehicle_speed_with_timeout();
+                                        }, 
+                                        nullptr, "Vehicle Speed");
     ParameterRegistry::register_parameter(MSG_TRANS_OVERRUN_STATE, 
                                         []() -> float { return (float)trans_state.overrun_state; }, 
                                         nullptr, "Overrun State");
@@ -355,6 +396,65 @@ uint8_t transmission_module_init(void) {
                                         get_pressure_solenoid_state, nullptr, "Pressure Solenoid");
     ParameterRegistry::register_parameter(MSG_TRANS_OVERRUN_SOL, 
                                         get_overrun_solenoid_state, nullptr, "Overrun Solenoid");
+    
+    // Register transmission fluid temperature for parameter access
+    #ifdef ARDUINO
+    Serial.print("Transmission: Registering MSG_TRANS_FLUID_TEMP (0x");
+    Serial.print(MSG_TRANS_FLUID_TEMP, HEX);
+    Serial.println(") with parameter registry...");
+    #endif
+    
+    bool fluid_temp_registered = ParameterRegistry::register_parameter(MSG_TRANS_FLUID_TEMP,
+                                        []() -> float { return trans_state.fluid_temperature; },
+                                        nullptr, "Fluid Temperature");
+    
+    #ifdef ARDUINO
+    Serial.print("Transmission: Fluid temperature parameter registration result: ");
+    Serial.println(fluid_temp_registered ? "SUCCESS" : "FAILED");
+    #endif
+    
+    // Register transmission messages for external broadcasting
+    #ifdef ARDUINO
+    Serial.println("Transmission: Registering messages for external broadcasting...");
+    Serial.println("Transmission: Registering MSG_TRANS_CURRENT_GEAR for broadcasting...");
+    #endif
+    
+    // Note: Vehicle speed is already registered in register_common_broadcast_messages()
+    // Don't register it again here to avoid conflicts
+    
+    // Register transmission gear for moderate-frequency broadcasting (1Hz)
+    ExternalMessageBroadcasting::register_broadcast_message(
+        MSG_TRANS_CURRENT_GEAR, "Transmission Current Gear", 1);
+    
+    // Register transmission fluid temperature for low-frequency broadcasting (1Hz)
+    ExternalMessageBroadcasting::register_broadcast_message(
+        MSG_TRANS_FLUID_TEMP, "Transmission Fluid Temperature", 1);
+    // Debug output disabled to avoid serial corruption
+    /*
+    #ifdef ARDUINO
+    Serial.println("Transmission: MSG_TRANS_FLUID_TEMP registered successfully");
+    #endif
+    */
+    
+    // Register transmission drive gear for moderate-frequency broadcasting (1Hz)
+    ExternalMessageBroadcasting::register_broadcast_message(
+        MSG_TRANS_DRIVE_GEAR, "Transmission Drive Gear", 1);
+    
+    // Register vehicle speed for broadcasting (1Hz) - this was missing!
+    ExternalMessageBroadcasting::register_broadcast_message(
+        MSG_VEHICLE_SPEED, "Vehicle Speed", 1);
+    
+    #ifdef ARDUINO
+    Serial.print("Transmission: Registered ");
+    Serial.print(trans_sensors_registered);
+    Serial.println(" sensors with input manager");
+    Serial.print("Transmission: Fluid temp sensor on pin A");
+    Serial.println(PIN_TRANS_FLUID_TEMP - A0);
+    #endif
+    
+    #ifdef ARDUINO
+    Serial.println("Transmission: External broadcasting registration complete");
+    #endif
     
     // Initialize state
     trans_state.current_gear = GEAR_UNKNOWN;
@@ -387,7 +487,7 @@ uint8_t transmission_module_init(void) {
     
     #ifdef ARDUINO
     Serial.print("Transmission module initialized with ");
-    Serial.print(registered_sensors);
+    Serial.print(trans_sensors_registered);
     Serial.print(" sensors and ");
     Serial.print(registered_outputs);
     Serial.println(" outputs");
@@ -397,7 +497,7 @@ uint8_t transmission_module_init(void) {
     Serial.println("Race car overrun clutch control enabled");
     #endif
     
-    return registered_sensors;
+    return trans_sensors_registered;
 }
 
 // =============================================================================
@@ -440,7 +540,8 @@ void transmission_module_update(void) {
     // Update overrun clutch control based on driving conditions (race car logic)
     update_overrun_clutch_control();
     
-    // Publish current transmission state
+    // Publish current transmission state to message bus
+    // This allows external broadcasting system to cache and broadcast the values
     publish_transmission_state();
 }
 
@@ -627,6 +728,25 @@ static void init_transmission_temp_tables(void) {
     Serial.print("°C to ");
     Serial.print(TRANS_TEMP_MAX_C);
     Serial.println("°C");
+    
+    // Debug: Show voltage range of lookup table
+    Serial.print("Voltage range: ");
+    Serial.print(trans_temp_voltage_table[0]);
+    Serial.print("V to ");
+    Serial.print(trans_temp_voltage_table[TRANS_TEMP_TABLE_SIZE-1]);
+    Serial.println("V");
+    
+    // Debug: Show a few table entries
+    Serial.println("Lookup table entries:");
+    for (uint8_t i = 0; i < TRANS_TEMP_TABLE_SIZE; i += 4) {  // Show every 4th entry
+        Serial.print("  [");
+        Serial.print(i);
+        Serial.print("] ");
+        Serial.print(trans_temp_voltage_table[i]);
+        Serial.print("V = ");
+        Serial.print(trans_temp_temp_table[i]);
+        Serial.println("°C");
+    }
     #else
     (void)beta;  // Suppress unused variable warning in tests
     #endif
@@ -658,6 +778,19 @@ static void subscribe_to_transmission_messages(void) {
 
 static void handle_trans_fluid_temp(const CANMessage* msg) {
     trans_state.fluid_temperature = MSG_UNPACK_FLOAT(msg);
+    // Temporarily disabled to avoid serial corruption
+    /*
+    #ifdef ARDUINO
+    static uint32_t last_temp_debug = 0;
+    uint32_t now = millis();
+    if (now - last_temp_debug >= 5000) {  // Every 5 seconds
+            // Serial.print("DEBUG: Received transmission fluid temp: ");
+    // Serial.print(trans_state.fluid_temperature);
+    // Serial.println("°C");
+        last_temp_debug = now;
+    }
+    #endif
+    */
 }
 
 static void handle_throttle_position(const CANMessage* msg) {
@@ -875,9 +1008,21 @@ static void process_shift_requests(void) {
 static void publish_transmission_state(void) {
     // Publish combined transmission state messages
     g_message_bus.publishFloat(MSG_TRANS_CURRENT_GEAR, (float)trans_state.current_gear);
+    g_message_bus.publishFloat(MSG_TRANS_DRIVE_GEAR, (float)current_auto_gear);
     g_message_bus.publishFloat(MSG_TRANS_SHIFT_REQUEST, (float)trans_state.shift_request);
     g_message_bus.publishFloat(MSG_TRANS_STATE_VALID, trans_state.valid_gear_position ? 1.0f : 0.0f);
     g_message_bus.publishFloat(MSG_TRANS_OVERRUN_STATE, (float)trans_state.overrun_state);
+    
+    // Publish vehicle speed - get from sensor or default to 0.0 when stopped
+    float vehicle_speed = 0.0f;  // Default for stopped vehicle
+    int8_t speed_sensor_index = input_manager_find_sensor_by_msg_id(MSG_VEHICLE_SPEED);
+    if (speed_sensor_index >= 0) {
+        sensor_runtime_t status;
+        if (input_manager_get_sensor_status(speed_sensor_index, &status)) {
+            vehicle_speed = status.calibrated_value;  // Use actual speed if available
+        }
+    }
+    g_message_bus.publishFloat(MSG_VEHICLE_SPEED, vehicle_speed);
 }
 
 static bool is_shift_safe(void) {

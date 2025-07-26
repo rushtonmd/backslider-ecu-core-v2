@@ -40,14 +40,14 @@ inline uint32_t millis() { return 0; }
 #define PADDLE_DEBOUNCE_MS      200        // Minimum time between shifts (configurable)
 
 // Thermistor configuration for transmission fluid temperature
-#define TRANS_TEMP_REF1_C       25.0f      // Reference temperature 1 (°C)
-#define TRANS_TEMP_REF1_OHMS    3500.0f    // Resistance at ref temp 1 (ohms)
-#define TRANS_TEMP_REF2_C       110.0f     // Reference temperature 2 (°C)
-#define TRANS_TEMP_REF2_OHMS    250.0f     // Resistance at ref temp 2 (ohms)
+#define TRANS_TEMP_REF1_C       20.0f      // Reference temperature 1 (°C)
+#define TRANS_TEMP_REF1_OHMS    2500.0f    // Resistance at ref temp 1 (ohms) - 2.5kΩ
+#define TRANS_TEMP_REF2_C       80.0f      // Reference temperature 2 (°C)
+#define TRANS_TEMP_REF2_OHMS    300.0f     // Resistance at ref temp 2 (ohms) - 0.3kΩ
 #define TRANS_TEMP_PULLUP_OHMS  2200       // 2.2K pullup resistor
 #define TRANS_TEMP_TABLE_SIZE   25         // Number of lookup table points
-#define TRANS_TEMP_MIN_C        -30.0f     // Minimum temperature range
-#define TRANS_TEMP_MAX_C        140.0f     // Maximum temperature range
+#define TRANS_TEMP_MIN_C        0.0f       // Minimum temperature range
+#define TRANS_TEMP_MAX_C        100.0f     // Maximum temperature range
 
 // Race car overrun clutch tuning parameters
 #define OVERRUN_THROTTLE_DISENGAGE_THRESHOLD    75.0f   // Disengage above 75% throttle

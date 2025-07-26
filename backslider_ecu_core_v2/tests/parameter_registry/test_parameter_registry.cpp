@@ -117,8 +117,14 @@ static bool test_parameter_request_handling() {
     CANMessage request;
     create_parameter_request(&request, 0x2000, PARAM_OP_READ_REQUEST, 0.0f, CHANNEL_SERIAL_USB, 1);
     
-    // Handle the request
+    // Clear any previous messages
+    clear_captured_messages();
+    
+    // Call parameter registry directly
     ParameterRegistry::handle_parameter_request(&request);
+    
+    // Process the message bus to deliver responses
+    g_message_bus.process();
     
     // Check that a response was generated
     if (captured_messages.size() != 1) {
@@ -159,8 +165,14 @@ static bool test_parameter_error_handling() {
     CANMessage request;
     create_parameter_request(&request, 0x9999, PARAM_OP_READ_REQUEST, 0.0f, CHANNEL_CAN_BUS, 2);
     
-    // Handle the request
+    // Clear any previous messages
+    clear_captured_messages();
+    
+    // Call parameter registry directly
     ParameterRegistry::handle_parameter_request(&request);
+    
+    // Process the message bus to deliver responses
+    g_message_bus.process();
     
     // Check that an error was generated
     if (captured_messages.size() != 1) {
@@ -192,32 +204,43 @@ static bool test_parameter_error_handling() {
     return true;
 }
 
+// Global variables for test state
+static bool test_write_called = false;
+static float test_written_value = 0.0f;
+
+// Test write handler function
+static bool test_write_handler(float value) {
+    test_write_called = true;
+    test_written_value = value;
+    return true;
+}
+
 static bool test_write_parameter_handling() {
-    // Register a writable parameter
-    bool write_called = false;
-    float written_value = 0.0f;
+    // Reset test state
+    test_write_called = false;
+    test_written_value = 0.0f;
     
+    // Register a writable parameter
     ParameterRegistry::register_parameter(0x3000, 
         []() -> float { return 0.0f; }, 
-        [&](float value) -> bool { 
-            write_called = true; 
-            written_value = value; 
-            return true; 
-        }, "Writable Parameter");
+        test_write_handler, "Writable Parameter");
     
     // Create a write request
     CANMessage request;
     create_parameter_request(&request, 0x3000, PARAM_OP_WRITE_REQUEST, 99.99f, CHANNEL_SERIAL_1, 3);
     
-    // Handle the request
+    // Call parameter registry directly
     ParameterRegistry::handle_parameter_request(&request);
     
+    // Process the message bus to deliver responses
+    g_message_bus.process();
+    
     // Check that write was called
-    if (!write_called) {
+    if (!test_write_called) {
         return false;
     }
     
-    if (written_value != 99.99f) {
+    if (test_written_value != 99.99f) {
         return false;
     }
     
@@ -265,8 +288,11 @@ static bool test_readonly_parameter_write_error() {
     CANMessage request;
     create_parameter_request(&request, 0x4000, PARAM_OP_WRITE_REQUEST, 50.0f, CHANNEL_SERIAL_2, 4);
     
-    // Handle the request
+    // Call parameter registry directly
     ParameterRegistry::handle_parameter_request(&request);
+    
+    // Process the message bus to deliver responses
+    g_message_bus.process();
     
     // Check that an error was generated
     if (captured_messages.size() != 1) {
@@ -304,6 +330,8 @@ int main() {
     
     // Set up message bus
     g_message_bus.init();
+    
+    // Subscribe to capture responses
     g_message_bus.subscribe(0x1000, capture_message);
     g_message_bus.subscribe(0x2000, capture_message);
     g_message_bus.subscribe(0x3000, capture_message);

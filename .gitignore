@@ -41,4 +41,5 @@ Thumbs.db
 *.with_bootloader.hex
 
 # Compilation databases
-compile_commands.json 
+compile_commands.json *.pyc
+debug_output.txt

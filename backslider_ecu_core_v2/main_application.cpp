@@ -22,9 +22,13 @@ extern MockSerial Serial1; // Additional serial port for external communications
 #include "transmission_module.h"
 #include "ecu_config.h"
 #include "parameter_registry.h"
+#include "external_message_broadcasting.h"
+#include "pin_assignments.h"
 
 // TODO: Create engine_sensors.h when ready
 // TODO: Create transmission_sensors.h when ready
+
+
 
 // I2C Device Objects
 #if defined(ARDUINO) && !defined(TESTING)
@@ -54,7 +58,7 @@ void MainApplication::init() {
     
     #ifdef ARDUINO
     // Initialize serial communication
-    Serial.begin(115200);
+    Serial.begin(115200);  // Revert to standard baud rate
     Serial.println("=== Backslider ECU Starting ===");
     
     // Note: LED initialization removed to avoid pin conflicts
@@ -288,6 +292,13 @@ void MainApplication::init() {
         external_canbus_initialized = false;
     }
 
+    // Initialize external message broadcasting FIRST
+    Serial.println("Initializing external message broadcasting...");
+    ExternalMessageBroadcasting::init();
+    
+    // Set up external interfaces for broadcasting
+    ExternalMessageBroadcasting::set_external_interfaces(&g_external_canbus, &g_external_serial);
+    
     // Initialize transmission module
     Serial.println("Initializing transmission module...");
     Serial.println("  - About to call transmission_module_init()...");
@@ -297,7 +308,12 @@ void MainApplication::init() {
     Serial.print(trans_sensors_registered);
     Serial.println(" transmission sensors");
     
+    // Initialize transmission sensors and controls - transmission_init() is already called above
+    // transmission_init();
+    
     // TODO: Register engine sensors when engine_sensors.h is created
+    
+    Serial.println("External message broadcasting initialized - ready for module registrations");
     // Serial.println("Registering engine sensors...");
     // uint8_t engine_sensors_registered = engine_sensors_init();
     // Serial.print("Registered ");
@@ -318,10 +334,29 @@ void MainApplication::init() {
 void MainApplication::run() {
     uint32_t loop_start_us = micros();
     
+    #ifdef ARDUINO
+    static uint32_t last_run_debug = 0;
+    uint32_t run_now = millis();
+    if (run_now - last_run_debug >= 5000) {  // Every 5 seconds
+        Serial.print("MainApplication: Main loop running - loop count: ");
+        Serial.println(loop_count);
+        last_run_debug = run_now;
+    }
+    #endif
+    
     // Update all sensors (each sensor manages its own timing)
     input_manager_update();
     
     // Process message bus (route sensor data to modules)
+    #ifdef ARDUINO
+    static uint32_t last_process_debug = 0;
+    uint32_t now = millis();
+    if (now - last_process_debug >= 2000) {  // Every 2 seconds
+        Serial.print("MainApplication: Processing message bus - queue size: ");
+        Serial.println(g_message_bus.getQueueSize());
+        last_process_debug = now;
+    }
+    #endif
     g_message_bus.process();
 
     // Update storage manager (handle storage operations and cache management)
@@ -341,18 +376,26 @@ void MainApplication::run() {
         g_external_canbus.update();
     }
     
+    // Update external message broadcasting
+    ExternalMessageBroadcasting::update();
+    
     // Calculate loop timing
     uint32_t loop_end_us = micros();
     last_loop_time_us = loop_end_us - loop_start_us;
+    // Publish heartbeat
+    // Update loop count for runtime monitoring
     loop_count++;
     
-    // Print heartbeat periodically
-    uint32_t current_time_ms = millis();
-    if (current_time_ms - last_status_report_ms >= 5000) {  // Every 5 seconds
+    // Debug heartbeat every 5 seconds (disabled to reduce serial clutter)
+    /*
+    static uint32_t last_heartbeat_time = 0;
+    uint32_t now = millis();
+    if (now - last_heartbeat_time >= 5000) {
         Serial.print("ECU heartbeat - Loop count: ");
         Serial.println(loop_count);
-        last_status_report_ms = current_time_ms;
+        last_heartbeat_time = now;
     }
+    */
     
     #ifdef ARDUINO
     // Note: Heartbeat LED removed to avoid pin conflicts

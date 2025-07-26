@@ -9,7 +9,7 @@ ECU_SOURCES = ../main_application.cpp
 MOCK_SOURCES = mock_arduino.cpp
 
 # Test module directories
-TEST_MODULES = main_application message_bus fuel_module ignition_module sensors input_manager transmission_module output_manager external_serial external_canbus storage_manager config_manager
+TEST_MODULES = main_application message_bus fuel_module ignition_module sensors input_manager transmission_module output_manager external_serial external_canbus storage_manager config_manager parameter_registry external_message_broadcasting
 
 # Find all test files in module directories
 TEST_FILES = $(wildcard */test_*.cpp)
@@ -33,8 +33,8 @@ endef
 # Specific rules for modules that need additional sources
 
 # Main application now includes transmission module dependencies, external communications, storage manager, and configuration manager
-main_application/test_main_application: main_application/test_main_application.cpp ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_serial.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../custom_canbus_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../config_manager.cpp ../ecu_config.cpp $(MOCK_SOURCES)
-	$(CXX) $(CXXFLAGS) -o $@ $< ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_serial.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../custom_canbus_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../config_manager.cpp ../ecu_config.cpp $(MOCK_SOURCES)
+main_application/test_main_application: main_application/test_main_application.cpp ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_serial.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../custom_canbus_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../config_manager.cpp ../ecu_config.cpp ../parameter_registry.cpp ../request_tracker.cpp ../external_message_broadcasting.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../main_application.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../output_manager.cpp ../external_serial.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../custom_canbus_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../config_manager.cpp ../ecu_config.cpp ../parameter_registry.cpp ../request_tracker.cpp ../external_message_broadcasting.cpp $(MOCK_SOURCES)
 
 fuel_module/test_%: fuel_module/test_%.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $< ../mod_fuel.cpp $(ECU_SOURCES)
@@ -73,20 +73,20 @@ input_manager/test_input_manager_frequency_counter: input_manager/test_input_man
 	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp $(MOCK_SOURCES)
 
 # Transmission module tests need all sensor components plus transmission module and custom_canbus_manager
-transmission_module/test_%: transmission_module/test_%.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../custom_canbus_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp mock_arduino.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../custom_canbus_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp mock_arduino.cpp
+transmission_module/test_%: transmission_module/test_%.cpp ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../custom_canbus_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../parameter_registry.cpp ../request_tracker.cpp ../external_message_broadcasting.cpp mock_arduino.cpp
+	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../input_manager.cpp ../sensor_calibration.cpp ../thermistor_table_generator.cpp ../transmission_module.cpp ../custom_canbus_manager.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../parameter_registry.cpp ../request_tracker.cpp ../external_message_broadcasting.cpp mock_arduino.cpp
 
 # Output manager tests need msg_bus, output_manager, and mock_arduino
 output_manager/test_output_manager: output_manager/test_output_manager.cpp ../msg_bus.cpp ../output_manager.cpp $(MOCK_SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $< ../msg_bus.cpp ../output_manager.cpp $(MOCK_SOURCES)
 
-# External serial tests need external_serial, msg_bus, and mock_arduino
-external_serial/test_external_serial: external_serial/test_external_serial.cpp ../external_serial.cpp ../msg_bus.cpp $(MOCK_SOURCES)
-	$(CXX) $(CXXFLAGS) -o $@ $< ../external_serial.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+# External serial tests need external_serial, msg_bus, request_tracker, parameter_helpers, and mock_arduino
+external_serial/test_external_serial: external_serial/test_external_serial.cpp ../external_serial.cpp ../msg_bus.cpp ../request_tracker.cpp ../parameter_helpers.h $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../external_serial.cpp ../msg_bus.cpp ../request_tracker.cpp $(MOCK_SOURCES)
 
-# External CAN bus tests need external_canbus, cache, handlers, custom_canbus_manager, storage_manager, msg_bus, and mock_arduino
-external_canbus/test_%: external_canbus/test_%.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../custom_canbus_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
-	$(CXX) $(CXXFLAGS) -o $@ $< ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../custom_canbus_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+# External CAN bus tests need external_canbus, cache, handlers, custom_canbus_manager, storage_manager, msg_bus, request_tracker, and mock_arduino
+external_canbus/test_%: external_canbus/test_%.cpp ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../custom_canbus_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../msg_bus.cpp ../request_tracker.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../external_canbus.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../custom_canbus_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../msg_bus.cpp ../request_tracker.cpp $(MOCK_SOURCES)
 
 # Storage manager tests need storage_manager, spi_flash_storage_backend, msg_bus, and mock_arduino
 storage_manager/test_storage_manager: storage_manager/test_storage_manager.cpp ../storage_manager.cpp ../spi_flash_storage_backend.cpp ../msg_bus.cpp $(MOCK_SOURCES)
@@ -99,6 +99,18 @@ storage_manager/test_spi_flash_storage: storage_manager/test_spi_flash_storage.c
 # W25Q128 storage tests need w25q128_storage_backend, ecu_config, and mock_arduino
 storage_manager/test_w25q128_storage: storage_manager/test_w25q128_storage.cpp ../w25q128_storage_backend.cpp ../ecu_config.cpp $(MOCK_SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $< ../w25q128_storage_backend.cpp ../ecu_config.cpp $(MOCK_SOURCES)
+
+# Parameter registry tests need parameter_registry, msg_bus, parameter_helpers, and mock_arduino
+parameter_registry/test_parameter_registry: parameter_registry/test_parameter_registry.cpp ../parameter_registry.cpp ../msg_bus.cpp ../parameter_helpers.h $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../parameter_registry.cpp ../msg_bus.cpp $(MOCK_SOURCES)
+
+# Request tracker tests need request_tracker and mock_arduino
+parameter_registry/test_request_tracker: parameter_registry/test_request_tracker.cpp ../request_tracker.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../request_tracker.cpp $(MOCK_SOURCES)
+
+# External message broadcasting tests need external_message_broadcasting, external_canbus, external_serial, cache, handlers, msg_bus, request_tracker, and mock_arduino
+external_message_broadcasting/test_external_message_broadcasting: external_message_broadcasting/test_external_message_broadcasting.cpp ../external_message_broadcasting.cpp ../external_canbus.cpp ../external_serial.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../msg_bus.cpp ../request_tracker.cpp $(MOCK_SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $< ../external_message_broadcasting.cpp ../external_canbus.cpp ../external_serial.cpp ../external_canbus_cache.cpp ../custom_message_handler.cpp ../obdii_handler.cpp ../msg_bus.cpp ../request_tracker.cpp $(MOCK_SOURCES)
 
 # Simple W25Q128 test
 storage_manager/test_w25q128_simple: storage_manager/test_w25q128_simple.cpp ../w25q128_storage_backend.cpp ../ecu_config.cpp $(MOCK_SOURCES)
@@ -172,6 +184,24 @@ run-config-manager: $(wildcard config_manager/test_*)
 		fi; \
 	done
 
+run-parameter-registry: $(wildcard parameter_registry/test_*)
+	@echo "=== Running Parameter Registry Tests ==="
+	@for test in $^; do \
+		if [ -x "$$test" ] && [ "$${test##*.}" != "cpp" ]; then \
+			echo "Running $$test..."; \
+			./$$test || exit 1; \
+		fi; \
+	done
+
+run-external-message-broadcasting: $(wildcard external_message_broadcasting/test_*)
+	@echo "=== Running External Message Broadcasting Tests ==="
+	@for test in $^; do \
+		if [ -x "$$test" ] && [ "$${test##*.}" != "cpp" ]; then \
+			echo "Running $$test..."; \
+			./$$test || exit 1; \
+		fi; \
+	done
+
 # Run all tests
 test: $(TEST_TARGETS)
 	@echo "=== Running All ECU Tests ==="
@@ -217,7 +247,9 @@ help:
 	@echo "  run-external-canbus  - Run external CAN bus tests only"
 	@echo "  run-storage-manager  - Run storage manager tests only"
 	@echo "  run-config-manager   - Run config manager tests only"
+	@echo "  run-parameter-registry - Run parameter registry tests only"
+	@echo "  run-external-message-broadcasting - Run external message broadcasting tests only"
 	@echo "  setup-dirs       - Create module directory structure"
 	@echo "  clean            - Remove all test executables"
 
-.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors run-input-manager run-transmission run-output-manager run-external-serial run-external-canbus run-storage-manager run-config-manager setup-dirs clean help
+.PHONY: all test run-main run-msg-bus run-fuel run-ignition run-sensors run-input-manager run-transmission run-output-manager run-external-serial run-external-canbus run-storage-manager run-config-manager run-parameter-registry run-external-message-broadcasting setup-dirs clean help

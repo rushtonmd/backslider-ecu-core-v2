@@ -74,12 +74,13 @@ float generate_thermistor_table(
     
     for (uint8_t i = 0; i < table_size; i++) {
         // Calculate temperature for this table entry
+        // Generate in descending temperature order to create ascending voltage table
         float temp_c;
         if (table_size <= 1) {
-            // For single point, use the minimum temperature
-            temp_c = temp_min_c;
+            // For single point, use the maximum temperature
+            temp_c = temp_max_c;
         } else {
-            temp_c = temp_min_c + (i * temp_step);
+            temp_c = temp_max_c - (i * temp_step);
         }
         
         // Calculate resistance at this temperature

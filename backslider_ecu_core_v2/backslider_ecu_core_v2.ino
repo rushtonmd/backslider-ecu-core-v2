@@ -24,7 +24,10 @@ void setup() {
     // Note: Removed serial wait loop for maximum startup speed
     
     Serial.println("Backslider ECU Core v2 - Starting...");
+    Serial.println("Backslider ECU Core v2 - About to call app.init()...");
     app.init();
+    Serial.println("Backslider ECU Core v2 - app.init() completed successfully");
+    Serial.println("Backslider ECU Core v2 - Entering main loop...");
 }
 
 void loop() {

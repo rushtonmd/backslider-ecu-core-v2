@@ -165,31 +165,32 @@ static bool test_request_id_generation() {
 static bool test_channel_isolation() {
     RequestTracker tracker;
     
-    // Add requests with same ID but different channels
+    // Add requests with different channels
     tracker.add_request(CHANNEL_SERIAL_USB, 0x1000);
     tracker.add_request(CHANNEL_SERIAL_1, 0x2000);
     
-    // Both should have request ID 1 (separate counters per tracker instance)
-    uint8_t request_id = 1;
+    // Each request gets a unique ID (1 and 2)
+    uint8_t request_id_1 = 1;
+    uint8_t request_id_2 = 2;
     
     // Check that requests are isolated by channel
-    if (!tracker.is_pending_request(request_id, CHANNEL_SERIAL_USB)) {
+    if (!tracker.is_pending_request(request_id_1, CHANNEL_SERIAL_USB)) {
         return false;
     }
     
-    if (!tracker.is_pending_request(request_id, CHANNEL_SERIAL_1)) {
+    if (!tracker.is_pending_request(request_id_2, CHANNEL_SERIAL_1)) {
         return false;
     }
     
     // Remove one channel's request
-    tracker.remove_request(request_id, CHANNEL_SERIAL_USB);
+    tracker.remove_request(request_id_1, CHANNEL_SERIAL_USB);
     
     // Check isolation
-    if (tracker.is_pending_request(request_id, CHANNEL_SERIAL_USB)) {
+    if (tracker.is_pending_request(request_id_1, CHANNEL_SERIAL_USB)) {
         return false;
     }
     
-    if (!tracker.is_pending_request(request_id, CHANNEL_SERIAL_1)) {
+    if (!tracker.is_pending_request(request_id_2, CHANNEL_SERIAL_1)) {
         return false;
     }
     

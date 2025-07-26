@@ -74,8 +74,8 @@ bool test_config_validation() {
     // Test pin access methods
     uint8_t can_tx_pin = config_manager.getCANTXPin();
     uint8_t can_rx_pin = config_manager.getCANRXPin();
-    print_test_result("CAN TX pin access", can_tx_pin == 0);
-    print_test_result("CAN RX pin access", can_rx_pin == 1);
+    print_test_result("CAN TX pin access", can_tx_pin == 1);
+    print_test_result("CAN RX pin access", can_rx_pin == 0);
     
     // Test I2C configuration access
     const I2CConfiguration& i2c_config = config_manager.getI2CConfig();
@@ -89,7 +89,7 @@ bool test_config_validation() {
     print_test_result("ADC address", adc_config.address == 0x48);
     print_test_result("ADC enabled", adc_config.enabled == true);
     
-    return validation_result && can_tx_pin == 0 && can_rx_pin == 1 &&
+    return validation_result && can_tx_pin == 1 && can_rx_pin == 0 &&
            i2c_config.bus_frequency == 400000 && gpio_config.address == 0x20 &&
            adc_config.address == 0x48;
 }

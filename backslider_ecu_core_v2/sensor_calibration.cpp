@@ -7,6 +7,10 @@
 #include "sensor_calibration.h"
 #include <math.h>
 
+#if defined(ARDUINO) && !defined(TESTING)
+#include <Arduino.h>
+#endif
+
 // =============================================================================
 // CALIBRATION LOOKUP TABLES
 // =============================================================================
@@ -76,6 +80,25 @@ float calibrate_thermistor(const thermistor_config_t* config, float voltage) {
         return 20.0f;  // Default room temperature
     }
     
+    // Debug output for thermistor calibration (disabled to reduce serial clutter)
+    /*
+    #ifdef ARDUINO
+    static uint32_t last_thermistor_debug = 0;
+    uint32_t now = millis();
+    if (now - last_thermistor_debug >= 5000) {
+            // Serial.print("DEBUG: Thermistor calibration - Voltage: ");
+    // Serial.print(voltage);
+    // Serial.print("V, Table range: ");
+    // Serial.print(config->voltage_table[0]);
+    // Serial.print("V to ");
+    // Serial.print(config->voltage_table[config->table_size-1]);
+    // Serial.print("V, Table size: ");
+    // Serial.println(config->table_size);
+        last_thermistor_debug = now;
+    }
+    #endif
+    */
+    
     return interpolate_table(config->voltage_table, config->temp_table, 
                            config->table_size, voltage);
 }
@@ -114,6 +137,11 @@ float interpolate_table(const float* x_table, const float* y_table,
         return 0.0f;
     }
     
+
+    
+    // Handle edge cases
+
+    
     // Handle edge cases
     if (x_value <= x_table[0]) {
         return y_table[0];
@@ -122,13 +150,27 @@ float interpolate_table(const float* x_table, const float* y_table,
         return y_table[table_size - 1];
     }
     
-    // Find interpolation points
+    // Find interpolation points (handle both ascending and descending order)
     for (uint8_t i = 0; i < table_size - 1; i++) {
-        if (x_value >= x_table[i] && x_value <= x_table[i + 1]) {
+        // Check if x_value is between x_table[i] and x_table[i+1] (works for both ascending and descending)
+        bool in_range = false;
+        if (x_table[i] <= x_table[i + 1]) {
+            // Ascending order
+            in_range = (x_value >= x_table[i] && x_value <= x_table[i + 1]);
+        } else {
+            // Descending order
+            in_range = (x_value <= x_table[i] && x_value >= x_table[i + 1]);
+        }
+        
+
+        
+        if (in_range) {
             // Linear interpolation between points
             float x_range = x_table[i + 1] - x_table[i];
             float y_range = y_table[i + 1] - y_table[i];
             float ratio = (x_value - x_table[i]) / x_range;
+            
+
             
             return y_table[i] + (ratio * y_range);
         }

@@ -159,6 +159,9 @@ private:
     uint16_t bytes_received;
     bool parsing_message;
     
+    // Prefix buffer for 0xFF 0xFF detection
+    uint8_t prefix_buffer[2];
+    
     // Statistics
     uint32_t messages_sent;
     uint32_t messages_received;
@@ -172,6 +175,7 @@ private:
     // Buffer management
     void add_byte_to_buffer(uint8_t byte);
     bool get_byte_from_buffer(uint8_t* byte);
+    void clear_receive_buffer();
     uint16_t get_buffer_available_space() const;
     
     // Message processing
@@ -203,6 +207,14 @@ public:
     serial_port_config_t get_port_config(int port_index) const;
     
     // Message bus integration
+    void setup_message_bus_integration();
+    
+    // NEW: Selective message handling (replaces legacy global broadcast)
+    void on_selective_message(const CANMessage* msg);
+    void route_parameter_response(const CANMessage* msg, parameter_msg_t* param);
+    void broadcast_to_enabled_ports(const CANMessage& msg);
+    
+    // Legacy method (deprecated)
     void on_message_bus_message(const CANMessage* msg);
     
     // Status and statistics
@@ -231,7 +243,6 @@ private:
     SerialBridge serial2_bridge;
     
     // Message bus integration
-    void setup_message_bus_integration();
     static void on_internal_message_published(const CANMessage* msg);
 };
 

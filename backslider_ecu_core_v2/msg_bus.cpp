@@ -73,6 +73,14 @@ bool MessageBus::publish(uint32_t msg_id, const void* data, uint8_t length) {
         create_standard_can_message(&msg, msg_id, data, length);
     }
     
+    #ifdef ARDUINO
+    // Debug: Check if this is a parameter message
+    if (length == 8) {  // parameter_msg_t is 8 bytes
+        Serial.print("MessageBus: Publishing parameter message to queue - CAN ID 0x");
+        Serial.println(msg_id, HEX);
+    }
+    #endif
+    
     // Add to internal queue
     if (!enqueue_internal_message(msg)) {
         queue_overflows++;
@@ -134,8 +142,28 @@ void MessageBus::process_internal_queue() {
 }
 
 void MessageBus::deliver_to_subscribers(const CANMessage& msg) {
+    // Temporarily disabled to avoid serial corruption
+    /*
+    #ifdef ARDUINO
+    static uint32_t last_delivery_debug = 0;
+    uint32_t now = millis();
+    if (now - last_delivery_debug >= 5000) {
+            // Serial.print("DEBUG: MessageBus delivery - timestamp: ");
+    // Serial.println(msg.timestamp);
+        last_delivery_debug = now;
+    }
+    #endif
+    */
+    
     // Call global broadcast handler first (for external serial forwarding)
     if (global_broadcast_handler != nullptr) {
+        #ifdef ARDUINO
+        // Debug: Check if this is a parameter message
+        if (msg.len == 8) {  // parameter_msg_t is 8 bytes
+            Serial.print("MessageBus: Calling global broadcast handler for parameter message - CAN ID 0x");
+            Serial.println(msg.id, HEX);
+        }
+        #endif
         global_broadcast_handler(&msg);
     }
     

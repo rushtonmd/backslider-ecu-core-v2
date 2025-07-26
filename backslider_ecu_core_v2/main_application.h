@@ -9,6 +9,7 @@
 #include "spi_flash_storage_backend.h"
 #include "config_manager.h"
 
+
 class MainApplication {
 public:
     MainApplication();

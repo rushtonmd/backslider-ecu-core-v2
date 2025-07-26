@@ -303,6 +303,22 @@ static void update_single_sensor(uint8_t sensor_index) {
     const sensor_definition_t* sensor = &sensors[sensor_index];
     sensor_runtime_t* runtime = &sensor_runtime[sensor_index];
     
+    // Debug output for fluid temperature sensor (disabled to reduce serial clutter)
+    /*
+    #ifdef ARDUINO
+    static uint32_t last_fluid_temp_debug = 0;
+    uint32_t now = millis();
+    if (sensor->msg_id == MSG_TRANS_FLUID_TEMP && now - last_fluid_temp_debug >= 5000) {
+            // Serial.print("DEBUG: Reading fluid temp sensor on pin ");
+    // Serial.print(sensor->pin);
+    // Serial.print(" (A");
+    // Serial.print(sensor->pin - A0);
+    // Serial.println(")");
+        last_fluid_temp_debug = now;
+    }
+    #endif
+    */
+    
     // Read raw sensor data
     if (sensor->type == SENSOR_DIGITAL_PULLUP) {
         uint8_t digital_value = digitalRead(sensor->pin);
@@ -480,6 +496,34 @@ static float apply_sensor_filtering(uint8_t sensor_index, float new_value) {
 }
 
 static void publish_sensor_value(uint32_t msg_id, float value) {
+    // Debug output for fluid temperature sensor - temporarily re-enabled to trace the issue
+    #ifdef ARDUINO
+    static uint32_t last_fluid_temp_publish_debug = 0;
+    uint32_t now = millis();
+    if (msg_id == MSG_TRANS_FLUID_TEMP && now - last_fluid_temp_publish_debug >= 5000) {
+        // Find the sensor to get raw voltage data
+        int8_t sensor_index = input_manager_find_sensor_by_msg_id(msg_id);
+        if (sensor_index >= 0) {
+            sensor_runtime_t status;
+            if (input_manager_get_sensor_status(sensor_index, &status)) {
+                // Debug output for transmission fluid temperature (disabled to reduce serial clutter)
+                /*
+                #ifdef ARDUINO
+                    // Serial.print("DEBUG: Fluid temp - Raw counts: ");
+    // Serial.print(status.raw_counts);
+    // Serial.print(", Raw voltage: ");
+    // Serial.print(status.raw_voltage);
+    // Serial.print("V, Calibrated: ");
+    // Serial.print(value);
+    // Serial.println("°C");
+                #endif
+                */
+            }
+        }
+        last_fluid_temp_publish_debug = now;
+    }
+    #endif
+    
     // Publish to message bus (internal only for now)
     g_message_bus.publishFloat(msg_id, value);
 }
