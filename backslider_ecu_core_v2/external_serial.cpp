@@ -4,7 +4,11 @@
 #include "external_serial.h"
 #include "msg_bus.h"
 #include "parameter_helpers.h"
+#ifdef TESTING
+// In testing mode, Stream class is defined in mock_arduino.h
+#else
 #include <Stream.h>
+#endif
 
 // Global instance
 ExternalSerial g_external_serial;
