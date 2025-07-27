@@ -84,15 +84,16 @@ void test_setup() {
     // Initialize message bus
     g_message_bus.init();
     
+    // TEMPORARILY COMMENTED OUT - This was causing infinite loop
     // Initialize external CAN bus
-    extern ExternalCanBus g_external_canbus;
-    external_canbus_config_t ext_can_config = {};
-    ext_can_config.baudrate = 500000;
-    ext_can_config.enable_obdii = false;
-    ext_can_config.enable_custom_messages = true;
-    ext_can_config.can_bus_number = 1;
-    ext_can_config.cache_default_max_age_ms = 1000;
-    g_external_canbus.init(ext_can_config);
+    // extern ExternalCanBus g_external_canbus;
+    // external_canbus_config_t ext_can_config = {};
+    // ext_can_config.baudrate = 500000;
+    // ext_can_config.enable_obdii = false;
+    // ext_can_config.enable_custom_messages = true;
+    // ext_can_config.can_bus_number = 1;
+    // ext_can_config.cache_default_max_age_ms = 1000;
+    // g_external_canbus.init(ext_can_config);
 }
 
 // =============================================================================

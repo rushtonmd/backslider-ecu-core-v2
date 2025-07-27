@@ -261,6 +261,18 @@ static bool test_configuration_access() {
 static bool test_frequency_based_broadcasting() {
     std::cout << "  Running test: frequency_based_broadcasting... ";
     
+    // Initialize the real external interfaces
+    external_canbus_config_t can_config = {
+        .enabled = true,
+        .baudrate = 500000,
+        .enable_obdii = false,
+        .enable_custom_messages = true,
+        .can_bus_number = 1,
+        .cache_default_max_age_ms = 1000
+    };
+    real_canbus.init(can_config);
+    real_serial.init({true, 115200, true, true, true, true, true, true, true, true});
+    
     // Register a message with 10Hz frequency
     ExternalMessageBroadcasting::register_broadcast_message(
         TEST_MSG_3, "Test Message 3", 10);
@@ -275,10 +287,12 @@ static bool test_frequency_based_broadcasting() {
     g_message_bus.publishFloat(TEST_MSG_3, 123.45f);
     g_message_bus.process();
     
-    // Now call update multiple times to trigger frequency-based broadcasting
-    for (int i = 0; i < 10; i++) {
-        ExternalMessageBroadcasting::update();
-    }
+    // Advance mock time to trigger frequency-based broadcasting
+    // 10Hz = 100ms interval, so advance by 150ms to ensure we trigger
+    mock_millis_time = 150;
+    
+    // Now call update to trigger frequency-based broadcasting
+    ExternalMessageBroadcasting::update();
     
     // Should get broadcasts from the update loop
     uint32_t final_can_sent = real_canbus.get_statistics().messages_sent;
