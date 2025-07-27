@@ -25,7 +25,13 @@ class PrefixECUClient:
         0x10500001: {"name": "Fluid Temperature", "unit": "°C"},
         0x10500101: {"name": "Current Gear", "unit": ""}, 
         0x10500104: {"name": "Drive Gear", "unit": ""},
-        0x10300002: {"name": "Vehicle Speed", "unit": "mph"}
+        0x10300002: {"name": "Vehicle Speed", "unit": "mph"},
+        # Transmission Outputs
+        0x10500110: {"name": "Shift Solenoid A", "unit": ""},
+        0x10500111: {"name": "Shift Solenoid B", "unit": ""},
+        0x10500112: {"name": "Overrun Solenoid", "unit": ""},
+        0x10500113: {"name": "Pressure Solenoid", "unit": "%"},
+        0x10500114: {"name": "Lockup Solenoid", "unit": ""}
     }
     
     READ_REQUEST = 0x01
@@ -191,7 +197,7 @@ class PrefixECUClient:
                     if not self.is_running:
                         break
                     self.send_parameter_request(can_id)
-                    time.sleep(0.2)  # Small delay between requests
+                    time.sleep(0.01)  # Reduced delay between requests (10ms instead of 200ms)
                 
                 # Wait for next cycle
                 time.sleep(self.request_interval)
@@ -600,6 +606,15 @@ HTML_TEMPLATE = """
             border-color: rgba(255,255,255,0.1);
         }
         
+        .parameter-card.transmission-output {
+            border-left: 4px solid #ff6b6b;
+            background: rgba(255,107,107,0.1);
+        }
+        
+        .parameter-card.transmission-output .parameter-name {
+            color: #ff6b6b;
+        }
+        
         .stats {
             background: rgba(255,255,255,0.1);
             padding: 20px;
@@ -645,12 +660,68 @@ HTML_TEMPLATE = """
             display: none;
         }
         
+        .success-message {
+            background: rgba(76, 175, 80, 0.9);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            display: none;
+        }
+        
         .protocol-info {
             background: rgba(76, 175, 80, 0.2);
             padding: 15px;
             border-radius: 10px;
             margin-top: 15px;
             border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+        
+        .update-controls {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 15px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: rgba(255,255,255,0.2);
+            outline: none;
+            -webkit-appearance: none;
+            margin: 10px 0;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            opacity: 0.7;
+            margin-top: 5px;
         }
         
         @media (max-width: 768px) {
@@ -698,8 +769,34 @@ HTML_TEMPLATE = """
             
             <div class="protocol-info">
                 <strong>📡 Protocol:</strong> 0xFF 0xFF prefix + 24-byte CAN message | 
-                <strong>📤 Requests:</strong> 1Hz automatic | 
+                <strong>📤 Requests:</strong> <span id="ecuRateDisplay">1Hz</span> automatic | 
                 <strong>📥 Responses:</strong> Binary parameter messages
+            </div>
+            
+            <div class="update-controls">
+                <div class="control-row">
+                    <div class="form-group">
+                        <label for="ecuRateSlider">ECU Request Rate: <span id="ecuRateValue">1.0</span> Hz</label>
+                        <input type="range" id="ecuRateSlider" min="0.1" max="10.0" step="0.1" value="1.0" class="slider">
+                        <div class="slider-labels">
+                            <span>0.1Hz</span>
+                            <span>5Hz</span>
+                            <span>10Hz</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="webRateSlider">Web Update Rate: <span id="webRateValue">1.0</span> Hz</label>
+                        <input type="range" id="webRateSlider" min="0.1" max="10.0" step="0.1" value="1.0" class="slider">
+                        <div class="slider-labels">
+                            <span>0.1Hz</span>
+                            <span>5Hz</span>
+                            <span>10Hz</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <button id="applyRatesBtn" onclick="applyUpdateRates()">Apply Rates</button>
+                    </div>
+                </div>
             </div>
             
             <div class="error-message" id="errorMessage"></div>
@@ -727,6 +824,37 @@ HTML_TEMPLATE = """
             <div class="parameter-card" id="param-0x10300002">
                 <div class="parameter-name">Vehicle Speed</div>
                 <div class="parameter-value">--<span class="parameter-unit">mph</span></div>
+                <div class="parameter-status">No data</div>
+            </div>
+            
+            <!-- Transmission Outputs -->
+            <div class="parameter-card transmission-output" id="param-0x10500110">
+                <div class="parameter-name">Shift Solenoid A</div>
+                <div class="parameter-value">--<span class="parameter-unit"></span></div>
+                <div class="parameter-status">No data</div>
+            </div>
+            
+            <div class="parameter-card transmission-output" id="param-0x10500111">
+                <div class="parameter-name">Shift Solenoid B</div>
+                <div class="parameter-value">--<span class="parameter-unit"></span></div>
+                <div class="parameter-status">No data</div>
+            </div>
+            
+            <div class="parameter-card transmission-output" id="param-0x10500112">
+                <div class="parameter-name">Overrun Solenoid</div>
+                <div class="parameter-value">--<span class="parameter-unit"></span></div>
+                <div class="parameter-status">No data</div>
+            </div>
+            
+            <div class="parameter-card transmission-output" id="param-0x10500113">
+                <div class="parameter-name">Pressure Solenoid</div>
+                <div class="parameter-value">--<span class="parameter-unit">%</span></div>
+                <div class="parameter-status">No data</div>
+            </div>
+            
+            <div class="parameter-card transmission-output" id="param-0x10500114">
+                <div class="parameter-name">Lockup Solenoid</div>
+                <div class="parameter-value">--<span class="parameter-unit"></span></div>
                 <div class="parameter-status">No data</div>
             </div>
         </div>
@@ -911,8 +1039,10 @@ HTML_TEMPLATE = """
             document.getElementById('errorMessage').style.display = 'none';
         }
         
+        let statusUpdateInterval;
+        
         function startStatusUpdates() {
-            setInterval(updateStatus, 1000);
+            statusUpdateInterval = setInterval(updateStatus, 1000);
             setInterval(checkStaleData, 5000);
         }
         
@@ -1007,6 +1137,15 @@ HTML_TEMPLATE = """
                     formattedValue = Math.round(data.value).toString();
                 } else if (data.name.includes('Speed')) {
                     formattedValue = Math.round(data.value).toString();
+                } else if (data.name.includes('Solenoid')) {
+                    // Format solenoid values: 0.0 = OFF, 1.0 = ON, or percentage for PWM
+                    if (data.name.includes('Pressure')) {
+                        // Pressure solenoid shows percentage
+                        formattedValue = Math.round(data.value * 100).toString();
+                    } else {
+                        // Other solenoids show ON/OFF
+                        formattedValue = data.value > 0.5 ? 'ON' : 'OFF';
+                    }
                 } else {
                     formattedValue = data.value.toFixed(2);
                 }
@@ -1043,6 +1182,70 @@ HTML_TEMPLATE = """
         
         // Refresh ports when dropdown is focused
         document.getElementById('portSelect').addEventListener('focus', loadPorts);
+        
+        // Slider event listeners
+        document.getElementById('ecuRateSlider').addEventListener('input', function() {
+            const value = parseFloat(this.value);
+            document.getElementById('ecuRateValue').textContent = value.toFixed(1);
+        });
+        
+        document.getElementById('webRateSlider').addEventListener('input', function() {
+            const value = parseFloat(this.value);
+            document.getElementById('webRateValue').textContent = value.toFixed(1);
+        });
+        
+        function applyUpdateRates() {
+            const ecuRate = parseFloat(document.getElementById('ecuRateSlider').value);
+            const webRate = parseFloat(document.getElementById('webRateSlider').value);
+            
+            // Update display
+            document.getElementById('ecuRateDisplay').textContent = ecuRate.toFixed(1) + 'Hz';
+            
+            // Send to backend
+            fetch('/api/update_rates', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    ecu_rate: ecuRate,
+                    web_rate: webRate
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Restart status updates with new rate
+                    clearInterval(statusUpdateInterval);
+                    statusUpdateInterval = setInterval(updateStatus, 1000 / webRate);
+                    
+                    // Show success message
+                    showSuccess(`Update rates applied: ECU ${ecuRate.toFixed(1)}Hz, Web ${webRate.toFixed(1)}Hz`);
+                } else {
+                    showError(data.error || 'Failed to update rates');
+                }
+            })
+            .catch(error => {
+                console.error('Update rates error:', error);
+                showError('Failed to update rates');
+            });
+        }
+        
+        function showSuccess(message) {
+            const successEl = document.getElementById('successMessage');
+            if (!successEl) {
+                const div = document.createElement('div');
+                div.id = 'successMessage';
+                div.className = 'success-message';
+                div.textContent = message;
+                document.querySelector('.controls').appendChild(div);
+            } else {
+                successEl.textContent = message;
+                successEl.style.display = 'block';
+            }
+            
+            setTimeout(() => {
+                if (successEl) successEl.style.display = 'none';
+            }, 3000);
+        }
     </script>
 </body>
 </html>
@@ -1117,6 +1320,31 @@ def get_status():
     except Exception as e:
         logger.error(f"Status error: {e}")
         return jsonify({'error': str(e)})
+
+@app.route('/api/update_rates', methods=['POST'])
+def update_rates():
+    """Update ECU request and web update rates"""
+    try:
+        data = request.get_json()
+        ecu_rate = data.get('ecu_rate', 1.0)
+        web_rate = data.get('web_rate', 1.0)
+        
+        # Validate rates
+        if ecu_rate < 0.1 or ecu_rate > 10.0:
+            return jsonify({'success': False, 'error': 'ECU rate must be between 0.1 and 10.0 Hz'})
+        if web_rate < 0.1 or web_rate > 10.0:
+            return jsonify({'success': False, 'error': 'Web rate must be between 0.1 and 10.0 Hz'})
+        
+        # Update ECU client request interval
+        ecu_client.request_interval = 1.0 / ecu_rate  # Convert Hz to seconds
+        
+        logger.info(f"Updated rates: ECU {ecu_rate:.1f}Hz, Web {web_rate:.1f}Hz")
+        
+        return jsonify({'success': True, 'ecu_rate': ecu_rate, 'web_rate': web_rate})
+        
+    except Exception as e:
+        logger.error(f"Update rates error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 # WebSocket event handlers
 @socketio.on('connect')
