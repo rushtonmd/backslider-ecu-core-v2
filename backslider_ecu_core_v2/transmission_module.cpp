@@ -3,11 +3,11 @@
 // Uses pure message bus architecture for all data exchange
 //
 // 5-Solenoid Transmission Control System:
-// - Shift Solenoid A (Pin 40): Digital ON/OFF
-// - Shift Solenoid B (Pin 41): Digital ON/OFF
-// - Overrun Solenoid (Pin 42): Digital ON/OFF (Race car logic implemented)
-// - Line Pressure Solenoid (Pin 43): PWM 0-100% (0% Park/Neutral, 100% all moving gears)
-// - Lockup Solenoid (Pin 44): Digital ON/OFF (automatic - ON in 4th gear only)
+// - Shift Solenoid A (Pin 21): Digital ON/OFF
+// - Shift Solenoid B (Pin 22): Digital ON/OFF
+// - Overrun Solenoid (Pin 23): PWM (Race car logic implemented)
+// - Line Pressure Solenoid (Pin 19): PWM 0-100% (0% Park/Neutral, 100% all moving gears)
+// - Lockup Solenoid (Pin 18): PWM (automatic - ON in 4th gear only)
 //
 // Gear Patterns (A/B/Lockup/Pressure):
 // Park/Neutral: OFF/OFF/OFF/0%
@@ -17,11 +17,6 @@
 // Gear 3: OFF/OFF/OFF/100%
 // Gear 4: ON/OFF/ON/100%  (Lockup engages for fuel efficiency)
 
-#ifndef ARDUINO
-// For desktop testing, include mock Arduino before anything else
-#include "../tests/mock_arduino.h"
-#endif
-
 #include "transmission_module.h"
 #include "input_manager.h"
 #include "msg_bus.h"
@@ -30,17 +25,13 @@
 #include "thermistor_table_generator.h"
 #include "custom_canbus_manager.h"
 #include "external_message_broadcasting.h"
+#include "output_manager.h"
+#include <Arduino.h>
 
 // Forward declarations to avoid header conflicts
-typedef struct output_definition_t output_definition_t;
-extern uint8_t output_manager_register_outputs(output_definition_t* outputs, uint8_t count);
 
 // External global instances
 extern CustomCanBusManager g_custom_canbus_manager;
-
-#ifdef ARDUINO
-#include <Arduino.h>
-#endif
 
 // =============================================================================
 // TRANSMISSION HARDWARE DEFINITIONS
@@ -119,14 +110,14 @@ static uint32_t overrun_change_count = 0;
 
 // Transmission hardware definition arrays (initialized in init functions below)
 static sensor_definition_t TRANSMISSION_SENSORS[TRANSMISSION_SENSOR_COUNT];
-// TODO: Re-enable when output manager header conflicts are resolved
-// static output_definition_t TRANSMISSION_OUTPUTS[TRANSMISSION_OUTPUT_COUNT];
+static output_definition_t TRANSMISSION_OUTPUTS[TRANSMISSION_OUTPUT_COUNT];
 
 // =============================================================================
 // PRIVATE FUNCTION DECLARATIONS
 // =============================================================================
 
 static void init_transmission_temp_tables(void);
+static void init_transmission_output_array(output_definition_t* outputs);
 
 // =============================================================================
 // HARDWARE INITIALIZATION FUNCTIONS
@@ -244,28 +235,81 @@ static void init_transmission_sensor_array(sensor_definition_t* sensors,
     sensors[9].name = "Vehicle Speed";
 }
 
-// TODO: Temporarily commented out due to header conflicts between 
-// input_manager_types.h and output_manager_types.h (both define digital_config_t differently)
-/*
 static void init_transmission_output_array(output_definition_t* outputs) {
-    // Shift Solenoid A (Digital ON/OFF)
+    // Shift Solenoid A (Digital ON/OFF) - Pin 21
     outputs[0].pin = PIN_TRANS_SHIFT_SOL_A;
-    outputs[0].type = OUTPUT_PWM;
-    outputs[0].config.pwm.frequency_hz = TRANS_SOLENOID_PWM_FREQ;
-    outputs[0].config.pwm.min_duty_cycle = 0.0f;
-    outputs[0].config.pwm.max_duty_cycle = 1.0f;
-    outputs[0].config.pwm.default_duty_cycle = TRANS_SOLENOID_DEFAULT_DUTY;
-    outputs[0].config.pwm.invert_output = 0;
+    outputs[0].type = OUTPUT_DIGITAL;
+    outputs[0].config.digital.active_high = 1;      // Active high
+    outputs[0].config.digital.default_state = 0;    // Default OFF (safe)
+    outputs[0].config.digital.open_drain = 0;       // Push-pull output
     outputs[0].msg_id = MSG_TRANS_SHIFT_SOL_A;
-    outputs[0].current_value = TRANS_SOLENOID_DEFAULT_DUTY;
+    outputs[0].current_value = 0.0f;                // Start OFF
     outputs[0].last_update_time_ms = 0;
     outputs[0].update_rate_limit_ms = TRANS_OUTPUT_UPDATE_RATE_MS;
     outputs[0].fault_detected = 0;
     outputs[0].name = "Trans Shift Sol A";
     
-    // ... (rest of the output definitions)
+    // Shift Solenoid B (Digital ON/OFF) - Pin 22
+    outputs[1].pin = PIN_TRANS_SHIFT_SOL_B;
+    outputs[1].type = OUTPUT_DIGITAL;
+    outputs[1].config.digital.active_high = 1;      // Active high
+    outputs[1].config.digital.default_state = 0;    // Default OFF (safe)
+    outputs[1].config.digital.open_drain = 0;       // Push-pull output
+    outputs[1].msg_id = MSG_TRANS_SHIFT_SOL_B;
+    outputs[1].current_value = 0.0f;                // Start OFF
+    outputs[1].last_update_time_ms = 0;
+    outputs[1].update_rate_limit_ms = TRANS_OUTPUT_UPDATE_RATE_MS;
+    outputs[1].fault_detected = 0;
+    outputs[1].name = "Trans Shift Sol B";
+    
+    // Overrun Solenoid (PWM) - Pin 23
+    outputs[2].pin = PIN_TRANS_OVERRUN_SOL;
+    outputs[2].type = OUTPUT_PWM;
+    outputs[2].config.pwm.frequency_hz = TRANS_SOLENOID_PWM_FREQ;
+    outputs[2].config.pwm.resolution_bits = 8;      // 8-bit resolution
+    outputs[2].config.pwm.min_duty_cycle = 0.0f;    // 0% minimum
+    outputs[2].config.pwm.max_duty_cycle = 1.0f;    // 100% maximum
+    outputs[2].config.pwm.default_duty_cycle = 0.0f; // Default OFF (safe)
+    outputs[2].config.pwm.invert_output = 0;        // Normal polarity
+    outputs[2].msg_id = MSG_TRANS_OVERRUN_SOL;
+    outputs[2].current_value = 0.0f;                // Start OFF
+    outputs[2].last_update_time_ms = 0;
+    outputs[2].update_rate_limit_ms = TRANS_OUTPUT_UPDATE_RATE_MS;
+    outputs[2].fault_detected = 0;
+    outputs[2].name = "Trans Overrun Sol";
+    
+    // Pressure Solenoid (PWM 0-100%) - Pin 19
+    outputs[3].pin = PIN_TRANS_PRESSURE_SOL;
+    outputs[3].type = OUTPUT_PWM;
+    outputs[3].config.pwm.frequency_hz = TRANS_PRESSURE_PWM_FREQ;
+    outputs[3].config.pwm.resolution_bits = 10;     // 10-bit resolution for fine control
+    outputs[3].config.pwm.min_duty_cycle = 0.0f;    // 0% minimum
+    outputs[3].config.pwm.max_duty_cycle = 1.0f;    // 100% maximum
+    outputs[3].config.pwm.default_duty_cycle = 0.0f; // Default OFF (safe)
+    outputs[3].config.pwm.invert_output = 0;        // Normal polarity
+    outputs[3].msg_id = MSG_TRANS_PRESSURE_SOL;
+    outputs[3].current_value = 0.0f;                // Start OFF
+    outputs[3].last_update_time_ms = 0;
+    outputs[3].update_rate_limit_ms = TRANS_OUTPUT_UPDATE_RATE_MS;
+    outputs[3].fault_detected = 0;
+    outputs[3].name = "Trans Pressure Sol";
+    
+    // Lockup Solenoid (PWM) - Pin 18
+    outputs[4].pin = PIN_TRANS_LOCKUP_SOL;
+    outputs[4].type = OUTPUT_PWM;
+    outputs[4].config.pwm.frequency_hz = TRANS_SOLENOID_PWM_FREQ;
+    outputs[4].config.pwm.resolution_bits = 8;      // 8-bit resolution
+    outputs[4].config.pwm.min_duty_cycle = 0.0f;    // 0% minimum
+    outputs[4].config.pwm.max_duty_cycle = 1.0f;    // 100% maximum
+    outputs[4].config.pwm.default_duty_cycle = 0.0f; // Default OFF (safe)
+    outputs[4].config.pwm.invert_output = 0;        // Normal polarity
+    outputs[4].msg_id = MSG_TRANS_LOCKUP_SOL;
+    outputs[4].current_value = 0.0f;                // Start OFF
+    outputs[4].last_update_time_ms = 0;
+    outputs[4].update_rate_limit_ms = TRANS_OUTPUT_UPDATE_RATE_MS;
+    outputs[4].fault_detected = 0;
+    outputs[4].name = "Trans Lockup Sol";
 }
-*/
 static void subscribe_to_transmission_messages(void);
 static void handle_trans_fluid_temp(const CANMessage* msg);
 static void handle_paddle_upshift(const CANMessage* msg);
@@ -319,8 +363,9 @@ uint8_t transmission_module_init(void) {
     
     // Initialize sensor arrays using the hardware definitions
     init_transmission_sensor_array(TRANSMISSION_SENSORS, trans_temp_voltage_table, trans_temp_temp_table);
-    // TODO: Initialize output arrays when header conflicts are resolved
-    // init_transmission_output_array(TRANSMISSION_OUTPUTS);
+    
+    // Initialize output arrays
+    init_transmission_output_array(TRANSMISSION_OUTPUTS);
     
     // Register all transmission sensors with the input manager
     uint8_t trans_sensors_registered = input_manager_register_sensors(TRANSMISSION_SENSORS, TRANSMISSION_SENSOR_COUNT);
@@ -356,9 +401,17 @@ uint8_t transmission_module_init(void) {
     Serial.println("Transmission: SKIPPING MCP23017 configuration (not initialized)");
     #endif
     
-    // TODO: Register outputs with output manager when header conflicts are resolved
-    // uint8_t registered_outputs = output_manager_register_outputs(TRANSMISSION_OUTPUTS, TRANSMISSION_OUTPUT_COUNT);
-    uint8_t registered_outputs = TRANSMISSION_OUTPUT_COUNT;  // For now, assume all outputs registered
+    // Register outputs with output manager
+    uint8_t registered_outputs = output_manager_register_outputs(TRANSMISSION_OUTPUTS, TRANSMISSION_OUTPUT_COUNT);
+    
+    #ifdef ARDUINO
+    Serial.print("Transmission: Registered ");
+    Serial.print(registered_outputs);
+    Serial.print(" outputs out of ");
+    Serial.print(TRANSMISSION_OUTPUT_COUNT);
+    Serial.println(" requested");
+    #endif
+    
     (void)registered_outputs;  // Suppress unused variable warning
     
     // Configure external CAN bus mappings for transmission data
@@ -423,12 +476,13 @@ uint8_t transmission_module_init(void) {
     // Don't register it again here to avoid conflicts
     
     // Register transmission gear for moderate-frequency broadcasting (1Hz)
-    ExternalMessageBroadcasting::register_broadcast_message(
-        MSG_TRANS_CURRENT_GEAR, "Transmission Current Gear", 1);
+    // Register transmission current gear for broadcasting (1Hz)
+    // ExternalMessageBroadcasting::register_broadcast_message(
+    //     MSG_TRANS_CURRENT_GEAR, "Transmission Current Gear", 1);
     
     // Register transmission fluid temperature for low-frequency broadcasting (1Hz)
-    ExternalMessageBroadcasting::register_broadcast_message(
-        MSG_TRANS_FLUID_TEMP, "Transmission Fluid Temperature", 1);
+    // ExternalMessageBroadcasting::register_broadcast_message(
+    //     MSG_TRANS_FLUID_TEMP, "Transmission Fluid Temperature", 1);
     // Debug output disabled to avoid serial corruption
     /*
     #ifdef ARDUINO
@@ -437,12 +491,12 @@ uint8_t transmission_module_init(void) {
     */
     
     // Register transmission drive gear for moderate-frequency broadcasting (1Hz)
-    ExternalMessageBroadcasting::register_broadcast_message(
-        MSG_TRANS_DRIVE_GEAR, "Transmission Drive Gear", 1);
+    // ExternalMessageBroadcasting::register_broadcast_message(
+    //     MSG_TRANS_DRIVE_GEAR, "Transmission Drive Gear", 1);
     
     // Register vehicle speed for broadcasting (1Hz) - this was missing!
-    ExternalMessageBroadcasting::register_broadcast_message(
-        MSG_VEHICLE_SPEED, "Vehicle Speed", 1);
+    // ExternalMessageBroadcasting::register_broadcast_message(
+    //     MSG_VEHICLE_SPEED, "Vehicle Speed", 1);
     
     #ifdef ARDUINO
     Serial.print("Transmission: Registered ");

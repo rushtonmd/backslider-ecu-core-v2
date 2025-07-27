@@ -114,13 +114,13 @@
 // =============================================================================
 
 // Transmission solenoid outputs
-#define PIN_TRANS_SHIFT_SOL_A  40    // Shift Solenoid A
-#define PIN_TRANS_SHIFT_SOL_B  41    // Shift Solenoid B
-#define PIN_TRANS_OVERRUN_SOL  42    // Overrun Solenoid
+#define PIN_TRANS_SHIFT_SOL_A  21    // Shift Solenoid A (Digital Output)
+#define PIN_TRANS_SHIFT_SOL_B  22    // Shift Solenoid B (Digital Output)
+#define PIN_TRANS_OVERRUN_SOL  23    // Overrun Solenoid (PWM)
 
 // Transmission pressure control
-#define PIN_TRANS_PRESSURE_SOL 43    // Line Pressure Solenoid (PWM)
-#define PIN_TRANS_LOCKUP_SOL   44    // Lockup Solenoid
+#define PIN_TRANS_PRESSURE_SOL 19    // Line Pressure Solenoid (PWM)
+#define PIN_TRANS_LOCKUP_SOL   18    // Lockup Solenoid (PWM)
 
 // =============================================================================
 // AUXILIARY CONTROL OUTPUTS

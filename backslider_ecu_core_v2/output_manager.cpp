@@ -1,18 +1,10 @@
 // output_manager.cpp
 // Implementation of ECU output management system
 
-#ifndef ARDUINO
-// For desktop testing, include mock Arduino before anything else
-#include "../tests/mock_arduino.h"
-#endif
-
 #include "output_manager.h"
 #include "msg_bus.h"
 #include "pin_assignments.h"
-
-#ifdef ARDUINO
 #include <Arduino.h>
-#endif
 
 // =============================================================================
 // PRIVATE DATA
@@ -418,6 +410,7 @@ static void update_digital_output(output_definition_t* output, float value) {
     #ifdef ARDUINO
     digitalWrite(output->pin, digital_state);
     #else
+    std::cout << "DEBUG: digitalWrite(" << (int)output->pin << ", " << (int)digital_state << ")" << std::endl;
     digitalWrite(output->pin, digital_state);  // Call mock digitalWrite
     #endif
 }

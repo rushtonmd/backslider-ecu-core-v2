@@ -1,10 +1,5 @@
 // ===================================
-#ifdef TESTING
-#include "tests/mock_arduino.h"
-extern MockSerial Serial;
-#else
 #include <Arduino.h>
-#endif
 
 #include "main_application.h"
 #include "config_manager.h"

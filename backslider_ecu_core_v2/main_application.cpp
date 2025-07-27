@@ -1,16 +1,10 @@
 // main_application.cpp
 // Main ECU application implementation
 
-#ifdef TESTING
-#include "tests/mock_arduino.h"
-extern MockSerial Serial;  // Use the Serial object from the test environment
-extern MockSerial Serial1; // Additional serial port for external communications
-#else
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_ADS1X15.h>
 #include <Adafruit_MCP23X17.h>
-#endif
 
 #include "main_application.h"
 #include "msg_bus.h"

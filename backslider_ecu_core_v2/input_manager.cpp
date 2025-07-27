@@ -4,18 +4,11 @@
 // This file contains the main logic for sensor management.
 // Kept focused on the core update loop and sensor registration.
 
-#ifdef TESTING
-// For desktop testing, include mock Arduino before anything else
-#include "tests/mock_arduino.h"
-#endif
-
 #include "input_manager.h"
 #include "sensor_calibration.h"
 #include "msg_bus.h"
 #include <stdbool.h>
-#ifndef ARDUINO
-#include <iostream>
-#endif
+#include <Arduino.h>
 
 // I2C device includes (Arduino only)
 #ifdef ARDUINO
