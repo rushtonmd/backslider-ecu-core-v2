@@ -24,6 +24,7 @@ class PrefixECUClient:
     PARAMETERS = {
         0x10500001: {"name": "Fluid Temperature", "unit": "°C"},
         0x10500101: {"name": "Current Gear", "unit": ""}, 
+        0x10500104: {"name": "Drive Gear", "unit": ""},
         0x10300002: {"name": "Vehicle Speed", "unit": "mph"}
     }
     
@@ -713,6 +714,12 @@ HTML_TEMPLATE = """
             
             <div class="parameter-card" id="param-0x10500101">
                 <div class="parameter-name">Current Gear</div>
+                <div class="parameter-value">--<span class="parameter-unit"></span></div>
+                <div class="parameter-status">No data</div>
+            </div>
+            
+            <div class="parameter-card" id="param-0x10500104">
+                <div class="parameter-name">Drive Gear</div>
                 <div class="parameter-value">--<span class="parameter-unit"></span></div>
                 <div class="parameter-status">No data</div>
             </div>

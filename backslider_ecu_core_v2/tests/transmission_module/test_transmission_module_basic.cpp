@@ -205,8 +205,8 @@ TEST(transmission_module_initialization) {
     // Initialize transmission module
     uint8_t sensors_registered = transmission_module_init();
     
-    // Should register 9 sensors (1 thermistor + 2 paddles + 6 gear switches)
-    assert(sensors_registered == 9);
+    // Should register 10 sensors (1 thermistor + 2 paddles + 6 gear switches + 1 vehicle speed)
+    assert(sensors_registered == 10);
     
     // Check initial state
     const transmission_state_t* state = transmission_get_state();

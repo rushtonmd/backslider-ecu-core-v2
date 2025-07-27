@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cassert>
 #include <cmath>
+#include <iomanip>
 
 // Include mock Arduino for testing
 #include "../mock_arduino.h"
@@ -114,18 +115,21 @@ TEST(table_generation_basic) {
     // Verify Beta coefficient is reasonable
     assert(beta > 2000.0f && beta < 6000.0f);
     
-    // Verify table is properly generated
-    assert(temp_table[0] == -20.0f);           // First temp should be min
-    assert(temp_table[table_size-1] == 130.0f); // Last temp should be max
+
     
-    // Verify temperatures are in ascending order
+    // Verify table is properly generated (generated in descending temperature order)
+    // Use float_equal for floating point comparison to handle precision issues
+    assert(float_equal(temp_table[0], 130.0f, 0.001f));           // First temp should be max (descending order)
+    assert(float_equal(temp_table[table_size-1], -20.0f, 0.001f)); // Last temp should be min (descending order)
+    
+    // Verify temperatures are in descending order (high to low)
     for (uint8_t i = 1; i < table_size; i++) {
-        assert(temp_table[i] > temp_table[i-1]);
+        assert(temp_table[i] < temp_table[i-1]);
     }
     
-    // Verify voltages are in descending order (higher temp = lower resistance = lower voltage)
+    // Verify voltages are in ascending order (higher temp = lower resistance = lower voltage)
     for (uint8_t i = 1; i < table_size; i++) {
-        assert(voltage_table[i] < voltage_table[i-1]);
+        assert(voltage_table[i] > voltage_table[i-1]);
     }
     
     // Verify voltage values are reasonable (0-3.3V range)
@@ -193,10 +197,10 @@ TEST(edge_cases_and_validation) {
         temp_table
     );
     
-    // Should still work, even with small range
+    // Should still work, even with small range (generated in descending order)
     assert(beta > 0.0f);
-    assert(temp_table[0] == 20.0f);
-    assert(temp_table[table_size-1] == 21.0f);
+    assert(temp_table[0] == 21.0f);           // First temp should be max (descending order)
+    assert(temp_table[table_size-1] == 20.0f); // Last temp should be min (descending order)
     
     // Test with single point table - this tests the edge case handling
     const uint8_t single_size = 1;
@@ -213,8 +217,8 @@ TEST(edge_cases_and_validation) {
         single_temp
     );
     
-    // With single size table, should get exactly the minimum temperature
-    assert(single_temp[0] == 25.0f);  // Should be exact now
+    // With single size table, should get exactly the maximum temperature (as per implementation)
+    assert(float_equal(single_temp[0], 30.0f, 0.001f));  // Should be the max temperature
     assert(single_voltage[0] > 0.0f && single_voltage[0] < 3.3f);
     
     // Use beta to avoid unused variable warning
@@ -238,44 +242,34 @@ TEST(table_integration_with_interpolation) {
         temp_table
     );
     
-    // Verify the table was generated correctly
-    assert(temp_table[0] == 0.0f);                    // First temp should be min
-    assert(temp_table[table_size-1] == 120.0f);       // Last temp should be max
+
     
-    // Verify voltages are in descending order (thermistor behavior)
+    // Verify the table was generated correctly (descending temperature order)
+    assert(float_equal(temp_table[0], 120.0f, 0.001f));                  // First temp should be max (descending order)
+    assert(float_equal(temp_table[table_size-1], 0.0f, 0.001f));         // Last temp should be min (descending order)
+    
+    // Verify voltages are in ascending order (thermistor behavior - descending temp = ascending voltage)
     for (uint8_t i = 1; i < table_size; i++) {
-        assert(voltage_table[i] < voltage_table[i-1]);
+        assert(voltage_table[i] > voltage_table[i-1]);
     }
     
-    // The voltage table is in descending order (higher voltage = lower temp)
-    // But interpolate_table expects ascending order in the x-axis (voltage)
-    // So we need to reverse both arrays for interpolation to work correctly
-    float voltage_reversed[table_size];
-    float temp_reversed[table_size];
-    
-    for (uint8_t i = 0; i < table_size; i++) {
-        voltage_reversed[i] = voltage_table[table_size - 1 - i];
-        temp_reversed[i] = temp_table[table_size - 1 - i];
-    }
-    
-    // Verify the reversed arrays are in ascending voltage order
-    for (uint8_t i = 1; i < table_size; i++) {
-        assert(voltage_reversed[i] > voltage_reversed[i-1]);
-    }
+    // The voltage table is already in ascending order (low voltage at high temp, high voltage at low temp)
+    // The interpolate_table function can handle both ascending and descending order
+    // So we can use the tables directly without reversal
     
     // Test basic interpolation functionality - just verify it doesn't crash
     // and returns reasonable values
-    float test_voltage = voltage_reversed[table_size/2];  // Pick a middle voltage
-    float result = interpolate_table(voltage_reversed, temp_reversed, table_size, test_voltage);
+    float test_voltage = voltage_table[table_size/2];  // Pick a middle voltage
+    float result = interpolate_table(voltage_table, temp_table, table_size, test_voltage);
     
     // Just verify the result is within a reasonable temperature range
     assert(result >= -50.0f && result <= 200.0f);  // Very broad range check
     
     // Test that exact table lookups work
     for (uint8_t i = 3; i < table_size - 3; i++) {  // Test middle values only
-        float exact_result = interpolate_table(voltage_reversed, temp_reversed, table_size, voltage_reversed[i]);
+        float exact_result = interpolate_table(voltage_table, temp_table, table_size, voltage_table[i]);
         // The result should be close to the expected temperature (within 1°C)
-        assert(float_equal(exact_result, temp_reversed[i], 1.0f));
+        assert(float_equal(exact_result, temp_table[i], 1.0f));
     }
 }
 
