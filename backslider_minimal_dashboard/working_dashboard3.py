@@ -25,7 +25,7 @@ class PrefixECUClient:
         0x10500001: {"name": "Fluid Temperature", "unit": "°C"},
         0x10500101: {"name": "Current Gear", "unit": ""}, 
         0x10500104: {"name": "Drive Gear", "unit": ""},
-        0x10300002: {"name": "Vehicle Speed", "unit": "mph"},
+        0x10300002: {"name": "Vehicle Speed", "unit": "kph"},
         # Transmission Outputs
         0x10500110: {"name": "Shift Solenoid A", "unit": ""},
         0x10500111: {"name": "Shift Solenoid B", "unit": ""},
@@ -823,7 +823,7 @@ HTML_TEMPLATE = """
             
             <div class="parameter-card" id="param-0x10300002">
                 <div class="parameter-name">Vehicle Speed</div>
-                <div class="parameter-value">--<span class="parameter-unit">mph</span></div>
+                <div class="parameter-value">--<span class="parameter-unit">kph</span></div>
                 <div class="parameter-status">No data</div>
             </div>
             

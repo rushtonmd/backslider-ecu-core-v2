@@ -93,8 +93,10 @@ uint8_t output_manager_register_outputs(const output_definition_t* outputs, uint
         registered_outputs[output_count].last_update_time_ms = 0;
         registered_outputs[output_count].fault_detected = 0;
         
-        // Configure the hardware pin
-        configure_output_pin(&registered_outputs[output_count]);
+            // Configure the hardware pin
+    configure_output_pin(&registered_outputs[output_count]);
+    
+
         
         // Subscribe to the output's control message
         g_message_bus.subscribe(registered_outputs[output_count].msg_id, handle_pwm_output_message);
@@ -278,6 +280,16 @@ static void handle_pwm_output_message(const CANMessage* msg) {
     }
     
     float value = MSG_UNPACK_FLOAT(msg);
+    
+    #ifdef ARDUINO
+    // Debug for pressure solenoid messages
+    if (msg->id == 0x10500113) {  // MSG_TRANS_PRESSURE_SOL
+        Serial.print("OUTPUT MANAGER RECEIVED PRESSURE: ");
+        Serial.print(value * 100.0f);
+        Serial.println("%");
+    }
+    #endif
+    
     output_definition_t* output = &registered_outputs[output_index];
     
     // Route to appropriate handler based on output type
@@ -318,6 +330,17 @@ static void configure_output_pin(output_definition_t* output) {
             pinMode(output->pin, OUTPUT);
             analogWriteFrequency(output->pin, output->config.pwm.frequency_hz);
             analogWriteResolution(output->config.pwm.resolution_bits);
+            
+            #ifdef ARDUINO
+            // Debug pin configuration
+            if (output->pin == 22) {
+                Serial.print("CONFIGURED PIN 22: OUTPUT, freq=");
+                Serial.print(output->config.pwm.frequency_hz);
+                Serial.print("Hz, resolution=");
+                Serial.print(output->config.pwm.resolution_bits);
+                Serial.println(" bits");
+            }
+            #endif
             break;
         case OUTPUT_DIGITAL:
             pinMode(output->pin, OUTPUT);
@@ -360,6 +383,15 @@ static void configure_output_pin(output_definition_t* output) {
 }
 
 static void update_pwm_output(output_definition_t* output, float value) {
+    #ifdef ARDUINO
+    // Debug for pressure solenoid
+    if (output->pin == 22) {
+        Serial.print("UPDATE_PWM_CALLED for pin 22, value: ");
+        Serial.print(value * 100.0f);
+        Serial.println("%");
+    }
+    #endif
+    
     // Check rate limiting
     if (!check_rate_limit(output)) {
         stats.rate_limited_updates++;
@@ -378,6 +410,13 @@ static void update_pwm_output(output_definition_t* output, float value) {
     stats.total_updates++;
     
     #ifdef ARDUINO
+    // Debug for pressure solenoid
+    if (output->pin == 22) {
+        Serial.print("PIN 22: About to calculate PWM, clamped_value=");
+        Serial.print(clamped_value * 100.0f);
+        Serial.println("%");
+    }
+    
     // Convert duty cycle to PWM value
     uint32_t max_value = (1 << output->config.pwm.resolution_bits) - 1;
     uint32_t pwm_value = (uint32_t)(clamped_value * max_value);
@@ -386,7 +425,30 @@ static void update_pwm_output(output_definition_t* output, float value) {
         pwm_value = max_value - pwm_value;
     }
     
+    // Simple debug for pin 22 (pressure solenoid)
+    if (output->pin == 22) {
+        Serial.print("PIN 22 PWM: ");
+        Serial.print(pwm_value);
+        Serial.print("/");
+        Serial.print(max_value);
+        Serial.print(" (");
+        Serial.print((float)pwm_value / max_value * 100.0f);
+        Serial.println("%)");
+        Serial.print("CALLING analogWrite(");
+        Serial.print(output->pin);
+        Serial.print(", ");
+        Serial.print(pwm_value);
+        Serial.println(")");
+    }
+    
     analogWrite(output->pin, pwm_value);
+    
+    #ifdef ARDUINO
+    // Debug after analogWrite
+    if (output->pin == 22) {
+        Serial.println("analogWrite() CALLED for pin 22");
+    }
+    #endif
     #endif
 }
 
@@ -408,6 +470,12 @@ static void update_digital_output(output_definition_t* output, float value) {
     stats.total_updates++;
     
     #ifdef ARDUINO
+    // Simple debug for pin 22 (pressure solenoid)
+    if (output->pin == 22) {
+        Serial.print("PIN 22 SET TO: ");
+        Serial.println(digital_state ? "HIGH" : "LOW");
+    }
+    
     digitalWrite(output->pin, digital_state);
     #else
     std::cout << "DEBUG: digitalWrite(" << (int)output->pin << ", " << (int)digital_state << ")" << std::endl;
@@ -453,7 +521,22 @@ static float clamp_value(float value, float min_val, float max_val) {
 
 static uint8_t check_rate_limit(output_definition_t* output) {
     uint32_t now = millis();
-    return (now - output->last_update_time_ms) >= output->update_rate_limit_ms;
+    uint8_t rate_ok = (now - output->last_update_time_ms) >= output->update_rate_limit_ms;
+    
+    #ifdef ARDUINO
+    // Debug for pressure solenoid rate limiting
+    if (output->pin == 22) {
+        if (!rate_ok) {
+            Serial.print("PIN 22 RATE LIMITED! Time since last update: ");
+            Serial.print(now - output->last_update_time_ms);
+            Serial.print("ms, limit: ");
+            Serial.print(output->update_rate_limit_ms);
+            Serial.println("ms");
+        }
+    }
+    #endif
+    
+    return rate_ok;
 }
 
 static void record_fault(uint8_t output_index, output_fault_t fault_type, float value) {
@@ -549,5 +632,28 @@ static uint16_t find_output_by_msg_id(uint32_t msg_id) {
             return i;
         }
     }
+    
+    #ifdef ARDUINO
+    // Debug for pressure solenoid
+    if (msg_id == 0x10500113) {  // MSG_TRANS_PRESSURE_SOL
+        Serial.print("PRESSURE SOLENOID NOT FOUND! Output count: ");
+        Serial.print(output_count);
+        Serial.print(", Looking for msg_id: 0x");
+        Serial.println(msg_id, HEX);
+        
+        // Show all registered outputs
+        for (uint8_t i = 0; i < output_count; i++) {
+            Serial.print("  Output ");
+            Serial.print(i);
+            Serial.print(": msg_id=0x");
+            Serial.print(registered_outputs[i].msg_id, HEX);
+            Serial.print(", pin=");
+            Serial.print(registered_outputs[i].pin);
+            Serial.print(", name=");
+            Serial.println(registered_outputs[i].name);
+        }
+    }
+    #endif
+    
     return OUTPUT_MANAGER_MAX_OUTPUTS; // Not found
 } 

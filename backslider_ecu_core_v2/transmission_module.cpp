@@ -585,6 +585,30 @@ static void configure_external_canbus_mappings(void) {
 }
 
 void transmission_module_update(void) {
+    #ifdef ARDUINO
+    static uint32_t last_debug_time = 0;
+    uint32_t now = millis();
+    if (now - last_debug_time >= 1000) {  // Every second
+        Serial.print("Transmission module update - Current gear: ");
+        Serial.print(transmission_gear_to_string(trans_state.current_gear));
+        Serial.print(", Valid: ");
+        Serial.print(trans_state.valid_gear_position ? "YES" : "NO");
+        Serial.print(", Switches: P=");
+        Serial.print(trans_state.park_switch ? "1" : "0");
+        Serial.print(" R=");
+        Serial.print(trans_state.reverse_switch ? "1" : "0");
+        Serial.print(" N=");
+        Serial.print(trans_state.neutral_switch ? "1" : "0");
+        Serial.print(" D=");
+        Serial.print(trans_state.drive_switch ? "1" : "0");
+        Serial.print(" 2=");
+        Serial.print(trans_state.second_switch ? "1" : "0");
+        Serial.print(" 1=");
+        Serial.println(trans_state.first_switch ? "1" : "0");
+        last_debug_time = now;
+    }
+    #endif
+    
     // Update gear position based on switch states
     update_gear_position();
     
@@ -1216,13 +1240,13 @@ static void set_line_pressure_for_gear(gear_position_t gear) {
     
     // Publish pressure control message
     g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent);
-                            
+    
     #ifdef ARDUINO
-    // Serial.print("Line pressure set for ");
-    // Serial.print(transmission_gear_to_string(gear));
-    // Serial.print(": ");
-    // Serial.print(pressure_percent * 100.0f);
-    // Serial.println("%");
+    Serial.print("GEAR PRESSURE PUBLISHED: ");
+    Serial.print(transmission_gear_to_string(gear));
+    Serial.print(" = ");
+    Serial.print(pressure_percent * 100.0f);
+    Serial.println("%");
     #endif
 }
 
