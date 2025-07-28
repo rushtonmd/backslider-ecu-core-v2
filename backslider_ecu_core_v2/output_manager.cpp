@@ -145,6 +145,63 @@ void output_manager_update(void) {
     
     stats.last_update_time_ms = millis();
     
+    // Periodic refresh of all outputs to maintain state
+    // This ensures outputs stay in the correct state even if messages are lost
+    static uint32_t last_refresh_time = 0;
+    uint32_t now = millis();
+    
+    // Refresh outputs every 100ms (10Hz) to maintain state
+    if (now - last_refresh_time >= 100) {
+        #ifdef ARDUINO
+        // Debug: Show periodic refresh for pin 22
+        for (uint8_t i = 0; i < output_count; i++) {
+            if (registered_outputs[i].pin == 22) {
+                Serial.print("PERIODIC REFRESH PIN 22: ");
+                Serial.print(registered_outputs[i].current_value * 100.0f);
+                Serial.println("%");
+                break;
+            }
+        }
+        #endif
+        for (uint8_t i = 0; i < output_count; i++) {
+            output_definition_t* output = &registered_outputs[i];
+            
+            // Skip rate limiting for periodic refresh to ensure state is maintained
+            switch (output->type) {
+                case OUTPUT_PWM: {
+                    // Re-apply current PWM value to maintain state
+                    #ifdef ARDUINO
+                    uint32_t max_value = (1 << output->config.pwm.resolution_bits) - 1;
+                    uint32_t pwm_value = (uint32_t)(output->current_value * max_value);
+                    analogWrite(output->pin, pwm_value);
+                    #endif
+                    break;
+                }
+                case OUTPUT_DIGITAL: {
+                    // Re-apply current digital state
+                    #ifdef ARDUINO
+                    bool digital_state = (output->current_value > 0.5f);
+                    if (!output->config.digital.active_high) {
+                        digital_state = !digital_state;
+                    }
+                    digitalWrite(output->pin, digital_state);
+                    #endif
+                    break;
+                }
+                case OUTPUT_ANALOG:
+                case OUTPUT_SPI:
+                case OUTPUT_VIRTUAL:
+                    // These don't need periodic refresh
+                    break;
+                case OUTPUT_TYPE_COUNT:
+                    break;
+            }
+        }
+        
+        last_refresh_time = now;
+        stats.total_updates += output_count; // Count refresh updates
+    }
+    
     // Process any pending message bus messages
     // (Message handling is done automatically via subscribers)
 }
@@ -383,11 +440,41 @@ static void configure_output_pin(output_definition_t* output) {
 }
 
 static void update_pwm_output(output_definition_t* output, float value) {
+    // Clamp value to safe range
+    float clamped_value = clamp_value(value, output->config.pwm.min_duty_cycle, output->config.pwm.max_duty_cycle);
+    if (clamped_value != value) {
+        stats.range_violations++;
+        record_fault(output - registered_outputs, OUTPUT_FAULT_RANGE_VIOLATION, value);
+    }
+    
+    // Only update if value has actually changed (with small tolerance for floating point)
+    float value_change = fabs(clamped_value - output->current_value);
+    
     #ifdef ARDUINO
-    // Debug for pressure solenoid
+    // Debug value change detection for pin 22
     if (output->pin == 22) {
-        Serial.print("UPDATE_PWM_CALLED for pin 22, value: ");
-        Serial.print(value * 100.0f);
+        Serial.print("VALUE CHANGE CHECK: current=");
+        Serial.print(output->current_value * 100.0f);
+        Serial.print("% new=");
+        Serial.print(clamped_value * 100.0f);
+        Serial.print("% change=");
+        Serial.print(value_change * 100.0f);
+        Serial.print("% threshold=0.1% -> ");
+        Serial.println(value_change < 0.001f ? "SKIP" : "UPDATE");
+    }
+    #endif
+    
+    if (value_change < 0.001f) {  // 0.1% tolerance
+        return;  // Value hasn't changed, skip update
+    }
+    
+    #ifdef ARDUINO
+    // Debug for pressure solenoid - only show when value actually changes
+    if (output->pin == 22) {
+        Serial.print("PIN 22 VALUE CHANGED: ");
+        Serial.print(output->current_value * 100.0f);
+        Serial.print("% -> ");
+        Serial.print(clamped_value * 100.0f);
         Serial.println("%");
     }
     #endif
@@ -396,13 +483,6 @@ static void update_pwm_output(output_definition_t* output, float value) {
     if (!check_rate_limit(output)) {
         stats.rate_limited_updates++;
         return;
-    }
-    
-    // Clamp value to safe range
-    float clamped_value = clamp_value(value, output->config.pwm.min_duty_cycle, output->config.pwm.max_duty_cycle);
-    if (clamped_value != value) {
-        stats.range_violations++;
-        record_fault(output - registered_outputs, OUTPUT_FAULT_RANGE_VIOLATION, value);
     }
     
     output->current_value = clamped_value;
@@ -453,19 +533,25 @@ static void update_pwm_output(output_definition_t* output, float value) {
 }
 
 static void update_digital_output(output_definition_t* output, float value) {
-    // Check rate limiting
-    if (!check_rate_limit(output)) {
-        stats.rate_limited_updates++;
-        return;
-    }
-    
     uint8_t digital_state = (value > 0.5f) ? 1 : 0;
     
     if (!output->config.digital.active_high) {
         digital_state = !digital_state;
     }
     
-    output->current_value = (float)digital_state;
+    // Only update if value has actually changed
+    float new_value = (float)digital_state;
+    if (fabs(new_value - output->current_value) < 0.1f) {  // Digital values should be exactly 0 or 1
+        return;  // Value hasn't changed, skip update
+    }
+    
+    // Check rate limiting
+    if (!check_rate_limit(output)) {
+        stats.rate_limited_updates++;
+        return;
+    }
+    
+    output->current_value = new_value;
     output->last_update_time_ms = millis();
     stats.total_updates++;
     

@@ -48,8 +48,8 @@ extern CustomCanBusManager g_custom_canbus_manager;
 #define GEAR_SWITCH_FILTER_STRENGTH      0       // No filtering for gear switches
 
 // PWM frequency constants
-#define TRANS_PRESSURE_PWM_FREQ     1000    // 1kHz for line pressure solenoid
-#define TRANS_SOLENOID_PWM_FREQ     100     // 100Hz for digital solenoids
+#define TRANS_PRESSURE_PWM_FREQ     250     // 250Hz for line pressure solenoid (typical auto solenoid range)
+#define TRANS_SOLENOID_PWM_FREQ     200     // 200Hz for digital solenoids (typical auto solenoid range)
 
 // Timing constants
 #define TRANS_OUTPUT_UPDATE_RATE_MS 10      // 10ms update rate for all outputs
@@ -618,9 +618,12 @@ void transmission_module_update(void) {
     // Update overrun clutch control based on driving conditions (race car logic)
     update_overrun_clutch_control();
     
-    // Publish current transmission state to message bus
-    // This allows external broadcasting system to cache and broadcast the values
-    publish_transmission_state();
+    // Publish current transmission state to message bus (reduced frequency)
+    static uint32_t last_publish_time = 0;
+    if (now - last_publish_time >= 50) {  // Publish every 50ms (20Hz) instead of every update
+        publish_transmission_state();
+        last_publish_time = now;
+    }
 }
 
 const transmission_state_t* transmission_get_state(void) {
@@ -1209,9 +1212,25 @@ static void set_shift_solenoid_pattern(uint8_t gear) {
             break;
     }
     
-    g_message_bus.publishFloat(MSG_TRANS_SHIFT_SOL_A, sol_a_state ? 1.0f : 0.0f);
-    g_message_bus.publishFloat(MSG_TRANS_SHIFT_SOL_B, sol_b_state ? 1.0f : 0.0f);
-    g_message_bus.publishFloat(MSG_TRANS_LOCKUP_SOL, lockup_state ? 1.0f : 0.0f);
+    // Only publish if values have changed (use static variables to track last states)
+    static bool last_sol_a_state = false;
+    static bool last_sol_b_state = false;
+    static bool last_lockup_state = false;
+    
+    if (sol_a_state != last_sol_a_state) {
+        g_message_bus.publishFloat(MSG_TRANS_SHIFT_SOL_A, sol_a_state ? 1.0f : 0.0f);
+        last_sol_a_state = sol_a_state;
+    }
+    
+    if (sol_b_state != last_sol_b_state) {
+        g_message_bus.publishFloat(MSG_TRANS_SHIFT_SOL_B, sol_b_state ? 1.0f : 0.0f);
+        last_sol_b_state = sol_b_state;
+    }
+    
+    if (lockup_state != last_lockup_state) {
+        g_message_bus.publishFloat(MSG_TRANS_LOCKUP_SOL, lockup_state ? 1.0f : 0.0f);
+        last_lockup_state = lockup_state;
+    }
                             
     #ifdef ARDUINO
             // Serial.print("Solenoids - Gear ");
@@ -1238,16 +1257,21 @@ static void set_line_pressure_for_gear(gear_position_t gear) {
         pressure_percent = 1.0f;  // Full pressure for all moving gears
     }
     
-    // Publish pressure control message
-    g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent);
-    
-    #ifdef ARDUINO
-    Serial.print("GEAR PRESSURE PUBLISHED: ");
-    Serial.print(transmission_gear_to_string(gear));
-    Serial.print(" = ");
-    Serial.print(pressure_percent * 100.0f);
-    Serial.println("%");
-    #endif
+    // Only publish if pressure value has changed
+    static float last_pressure_percent = -1.0f;  // Start with invalid value to force first update
+    if (fabs(pressure_percent - last_pressure_percent) > 0.001f) {
+        // Publish pressure control message
+        g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent);
+        last_pressure_percent = pressure_percent;
+                            
+        #ifdef ARDUINO
+        Serial.print("GEAR PRESSURE PUBLISHED: ");
+        Serial.print(transmission_gear_to_string(gear));
+        Serial.print(" = ");
+        Serial.print(pressure_percent * 100.0f);
+        Serial.println("%");
+        #endif
+    }
 }
 
 static void set_line_pressure(float pressure_percent) {
