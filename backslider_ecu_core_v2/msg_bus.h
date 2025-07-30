@@ -150,6 +150,8 @@ public:
     // Statistics and diagnostics
     uint32_t getMessagesProcessed() const { return messages_processed; }
     uint32_t getQueueOverflows() const { return queue_overflows; }
+    uint32_t getMessagesPublished() const { return messages_published; }
+    uint32_t getMessagesPerSecond() const { return messages_per_second; }
 
     uint16_t getSubscriberCount() const { return subscriber_count; }
     
@@ -185,6 +187,9 @@ private:
     // Statistics
     uint32_t messages_processed;
     uint32_t queue_overflows;
+    uint32_t messages_published;
+    uint32_t messages_per_second;
+    uint32_t last_stats_reset_ms;
     
     // Internal methods
     bool enqueue_internal_message(const CANMessage& msg);

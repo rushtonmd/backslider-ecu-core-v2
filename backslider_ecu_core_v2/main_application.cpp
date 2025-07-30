@@ -48,6 +48,8 @@ void MainApplication::init() {
     loop_count = 0;
     last_loop_time_us = 0;
     last_status_report_ms = 0;
+    loops_per_second = 0;
+    last_loop_stats_reset_ms = 0;
     external_canbus_initialized = false;
     
     #ifdef ARDUINO
@@ -332,8 +334,8 @@ void MainApplication::run() {
     static uint32_t last_run_debug = 0;
     uint32_t run_now = millis();
     if (run_now - last_run_debug >= 5000) {  // Every 5 seconds
-        Serial.print("MainApplication: Main loop running - loop count: ");
-        Serial.println(loop_count);
+        Serial.print("MainApplication: Main loop running - loops/sec: ");
+        Serial.println(loops_per_second);
         last_run_debug = run_now;
     }
     #endif
@@ -347,7 +349,11 @@ void MainApplication::run() {
     uint32_t now = millis();
     if (now - last_process_debug >= 2000) {  // Every 2 seconds
         Serial.print("MainApplication: Processing message bus - queue size: ");
-        Serial.println(g_message_bus.getQueueSize());
+        Serial.print(g_message_bus.getQueueSize());
+        Serial.print(", messages/sec: ");
+        Serial.print(g_message_bus.getMessagesPerSecond());
+        Serial.print(", total published: ");
+        Serial.println(g_message_bus.getMessagesPublished());
         last_process_debug = now;
     }
     #endif
@@ -376,20 +382,18 @@ void MainApplication::run() {
     // Calculate loop timing
     uint32_t loop_end_us = micros();
     last_loop_time_us = loop_end_us - loop_start_us;
+    
+    // Update loop count and calculate loops per second
+    loop_count++;
+    uint32_t now_ms = millis();
+    if (now_ms - last_loop_stats_reset_ms >= 1000) {  // Every second
+        loops_per_second = loop_count;
+        loop_count = 0;  // Reset counter
+        last_loop_stats_reset_ms = now_ms;
+    }
+    
     // Publish heartbeat
     // Update loop count for runtime monitoring
-    loop_count++;
-    
-    // Debug heartbeat every 5 seconds (disabled to reduce serial clutter)
-    /*
-    static uint32_t last_heartbeat_time = 0;
-    uint32_t now = millis();
-    if (now - last_heartbeat_time >= 5000) {
-        Serial.print("ECU heartbeat - Loop count: ");
-        Serial.println(loop_count);
-        last_heartbeat_time = now;
-    }
-    */
     
     #ifdef ARDUINO
     // Note: Heartbeat LED removed to avoid pin conflicts
@@ -400,8 +404,8 @@ void MainApplication::printStatusReport() {
     Serial.println("=== ECU Status Report ===");
     
     // System timing
-    Serial.print("Loop count: ");
-    Serial.println(loop_count);
+    Serial.print("Loops per second: ");
+    Serial.println(loops_per_second);
     Serial.print("Last loop time: ");
     Serial.print(last_loop_time_us);
     Serial.println(" µs");
@@ -409,6 +413,10 @@ void MainApplication::printStatusReport() {
     // Message bus statistics
     Serial.print("Messages processed: ");
     Serial.println(g_message_bus.getMessagesProcessed());
+    Serial.print("Messages published: ");
+    Serial.println(g_message_bus.getMessagesPublished());
+    Serial.print("Messages per second: ");
+    Serial.println(g_message_bus.getMessagesPerSecond());
     Serial.print("Queue overflows: ");
     Serial.println(g_message_bus.getQueueOverflows());
     

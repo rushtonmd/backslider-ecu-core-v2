@@ -19,6 +19,7 @@ public:
     // Diagnostics
     uint32_t getLoopCount() const { return loop_count; }
     uint32_t getLastLoopTime() const { return last_loop_time_us; }
+    uint32_t getLoopsPerSecond() const { return loops_per_second; }
     
     // System access
     StorageManager& getStorageManager() { return storage_manager; }
@@ -31,6 +32,8 @@ private:
     uint32_t loop_count;
     uint32_t last_loop_time_us;
     uint32_t last_status_report_ms;
+    uint32_t loops_per_second;
+    uint32_t last_loop_stats_reset_ms;
     bool external_canbus_initialized;
     
     // Core systems (initialized in this order)

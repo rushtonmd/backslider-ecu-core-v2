@@ -152,17 +152,7 @@ void output_manager_update(void) {
     
     // Refresh outputs every 100ms (10Hz) to maintain state
     if (now - last_refresh_time >= 100) {
-        #ifdef ARDUINO
-        // Debug: Show periodic refresh for pin 22
-        for (uint8_t i = 0; i < output_count; i++) {
-            if (registered_outputs[i].pin == 22) {
-                Serial.print("PERIODIC REFRESH PIN 22: ");
-                Serial.print(registered_outputs[i].current_value * 100.0f);
-                Serial.println("%");
-                break;
-            }
-        }
-        #endif
+        // Debug output removed to reduce serial clutter
         for (uint8_t i = 0; i < output_count; i++) {
             output_definition_t* output = &registered_outputs[i];
             
@@ -207,9 +197,7 @@ void output_manager_update(void) {
 }
 
 void output_manager_safe_state(void) {
-    #ifdef ARDUINO
-    Serial.println("Setting outputs to safe state");
-    #endif
+    // Debug output removed to reduce serial clutter
     
     for (uint8_t i = 0; i < output_count; i++) {
         output_definition_t* output = &registered_outputs[i];
@@ -244,10 +232,7 @@ void output_manager_enable(uint8_t enable) {
         output_manager_safe_state();
     }
     
-    #ifdef ARDUINO
-    Serial.print("Output manager ");
-    Serial.println(enable ? "enabled" : "disabled");
-    #endif
+    // Debug output removed to reduce serial clutter
 }
 
 float output_manager_get_value(uint8_t output_index) {

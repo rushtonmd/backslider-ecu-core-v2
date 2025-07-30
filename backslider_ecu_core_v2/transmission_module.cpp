@@ -354,9 +354,7 @@ static void configure_external_canbus_mappings(void);
 // =============================================================================
 
 uint8_t transmission_module_init(void) {
-    #ifdef ARDUINO
-    Serial.println("Initializing transmission module...");
-    #endif
+    // Debug output removed to reduce serial clutter
     
     // Initialize thermistor lookup tables
     init_transmission_temp_tables();
@@ -370,47 +368,15 @@ uint8_t transmission_module_init(void) {
     // Register all transmission sensors with the input manager
     uint8_t trans_sensors_registered = input_manager_register_sensors(TRANSMISSION_SENSORS, TRANSMISSION_SENSOR_COUNT);
     
-    #ifdef ARDUINO
-    Serial.print("Transmission: Registered ");
-    Serial.print(trans_sensors_registered);
-    Serial.print(" sensors out of ");
-    Serial.print(TRANSMISSION_SENSOR_COUNT);
-    Serial.println(" requested");
-    
-    // Debug: Show details of vehicle speed sensor (sensor #9)
-    if (trans_sensors_registered >= 10) {
-            // Serial.print("DEBUG: Vehicle speed sensor registered - pin ");
-    // Serial.print(TRANSMISSION_SENSORS[9].pin);
-    // Serial.print(", type ");
-    // Serial.print(TRANSMISSION_SENSORS[9].type);
-    // Serial.print(", msg_id 0x");
-    // Serial.println(TRANSMISSION_SENSORS[9].msg_id, HEX);
-    } else {
-        Serial.println("WARNING: Vehicle speed sensor may not have been registered!");
-    }
-    #endif
+    // Debug output removed to reduce serial clutter
     
     // Configure MCP23017 GPIO pins for transmission gear switches
-    #ifdef ARDUINO
-    // SKIPPING MCP23017 configuration for debugging (MCP23017 not initialized)
-    // Configure pins 0-5 as inputs with pullup for gear selector switches
-    // for (uint8_t pin = 0; pin <= 5; pin++) {
-    //     configure_mcp23017_pin(pin, INPUT_PULLUP);
-    // }
-    // Serial.println("Transmission: Configured MCP23017 pins 0-5 as gear selector inputs");
-    Serial.println("Transmission: SKIPPING MCP23017 configuration (not initialized)");
-    #endif
+    // Debug output removed to reduce serial clutter
     
     // Register outputs with output manager
     uint8_t registered_outputs = output_manager_register_outputs(TRANSMISSION_OUTPUTS, TRANSMISSION_OUTPUT_COUNT);
     
-    #ifdef ARDUINO
-    Serial.print("Transmission: Registered ");
-    Serial.print(registered_outputs);
-    Serial.print(" outputs out of ");
-    Serial.print(TRANSMISSION_OUTPUT_COUNT);
-    Serial.println(" requested");
-    #endif
+    // Debug output removed to reduce serial clutter
     
     (void)registered_outputs;  // Suppress unused variable warning
     
@@ -451,26 +417,16 @@ uint8_t transmission_module_init(void) {
                                         get_overrun_solenoid_state, nullptr, "Overrun Solenoid");
     
     // Register transmission fluid temperature for parameter access
-    #ifdef ARDUINO
-    Serial.print("Transmission: Registering MSG_TRANS_FLUID_TEMP (0x");
-    Serial.print(MSG_TRANS_FLUID_TEMP, HEX);
-    Serial.println(") with parameter registry...");
-    #endif
+    // Debug output removed to reduce serial clutter
     
     bool fluid_temp_registered = ParameterRegistry::register_parameter(MSG_TRANS_FLUID_TEMP,
                                         []() -> float { return trans_state.fluid_temperature; },
                                         nullptr, "Fluid Temperature");
     
-    #ifdef ARDUINO
-    Serial.print("Transmission: Fluid temperature parameter registration result: ");
-    Serial.println(fluid_temp_registered ? "SUCCESS" : "FAILED");
-    #endif
+    // Debug output removed to reduce serial clutter
     
     // Register transmission messages for external broadcasting
-    #ifdef ARDUINO
-    Serial.println("Transmission: Registering messages for external broadcasting...");
-    Serial.println("Transmission: Registering MSG_TRANS_CURRENT_GEAR for broadcasting...");
-    #endif
+    // Debug output removed to reduce serial clutter
     
     // Note: Vehicle speed is already registered in register_common_broadcast_messages()
     // Don't register it again here to avoid conflicts
@@ -483,32 +439,7 @@ uint8_t transmission_module_init(void) {
     // Register transmission fluid temperature for low-frequency broadcasting (1Hz)
     // ExternalMessageBroadcasting::register_broadcast_message(
     //     MSG_TRANS_FLUID_TEMP, "Transmission Fluid Temperature", 1);
-    // Debug output disabled to avoid serial corruption
-    /*
-    #ifdef ARDUINO
-    Serial.println("Transmission: MSG_TRANS_FLUID_TEMP registered successfully");
-    #endif
-    */
-    
-    // Register transmission drive gear for moderate-frequency broadcasting (1Hz)
-    // ExternalMessageBroadcasting::register_broadcast_message(
-    //     MSG_TRANS_DRIVE_GEAR, "Transmission Drive Gear", 1);
-    
-    // Register vehicle speed for broadcasting (1Hz) - this was missing!
-    // ExternalMessageBroadcasting::register_broadcast_message(
-    //     MSG_VEHICLE_SPEED, "Vehicle Speed", 1);
-    
-    #ifdef ARDUINO
-    Serial.print("Transmission: Registered ");
-    Serial.print(trans_sensors_registered);
-    Serial.println(" sensors with input manager");
-    Serial.print("Transmission: Fluid temp sensor on pin A");
-    Serial.println(PIN_TRANS_FLUID_TEMP - A0);
-    #endif
-    
-    #ifdef ARDUINO
-    Serial.println("Transmission: External broadcasting registration complete");
-    #endif
+    // Debug output removed to reduce serial clutter
     
     // Initialize state
     trans_state.current_gear = GEAR_UNKNOWN;
@@ -539,17 +470,7 @@ uint8_t transmission_module_init(void) {
     // Set transmission outputs to safe state initially
     transmission_outputs_safe_state();
     
-    #ifdef ARDUINO
-    Serial.print("Transmission module initialized with ");
-    Serial.print(trans_sensors_registered);
-    Serial.print(" sensors and ");
-    Serial.print(registered_outputs);
-    Serial.println(" outputs");
-    Serial.print("Paddle debounce time: ");
-    Serial.print(paddle_debounce_ms);
-    Serial.println("ms");
-    Serial.println("Race car overrun clutch control enabled");
-    #endif
+    // Debug output removed to reduce serial clutter
     
     return trans_sensors_registered;
 }
@@ -574,40 +495,14 @@ static void configure_external_canbus_mappings(void) {
     
     // Add the mapping to the custom CAN bus manager
     if (g_custom_canbus_manager.add_mapping(throttle_mapping)) {
-        #ifdef ARDUINO
-        Serial.println("Transmission: Added Haltech throttle position mapping (0x360 -> MSG_THROTTLE_POSITION)");
-        #endif
+        // Debug output removed to reduce serial clutter
     } else {
-        #ifdef ARDUINO
-        Serial.println("Transmission: Failed to add Haltech throttle position mapping");
-        #endif
+        // Debug output removed to reduce serial clutter
     }
 }
 
 void transmission_module_update(void) {
-    #ifdef ARDUINO
-    static uint32_t last_debug_time = 0;
-    uint32_t now = millis();
-    if (now - last_debug_time >= 1000) {  // Every second
-        Serial.print("Transmission module update - Current gear: ");
-        Serial.print(transmission_gear_to_string(trans_state.current_gear));
-        Serial.print(", Valid: ");
-        Serial.print(trans_state.valid_gear_position ? "YES" : "NO");
-        Serial.print(", Switches: P=");
-        Serial.print(trans_state.park_switch ? "1" : "0");
-        Serial.print(" R=");
-        Serial.print(trans_state.reverse_switch ? "1" : "0");
-        Serial.print(" N=");
-        Serial.print(trans_state.neutral_switch ? "1" : "0");
-        Serial.print(" D=");
-        Serial.print(trans_state.drive_switch ? "1" : "0");
-        Serial.print(" 2=");
-        Serial.print(trans_state.second_switch ? "1" : "0");
-        Serial.print(" 1=");
-        Serial.println(trans_state.first_switch ? "1" : "0");
-        last_debug_time = now;
-    }
-    #endif
+    // Debug output removed to reduce serial clutter
     
     // Update gear position based on switch states
     update_gear_position();
@@ -620,6 +515,7 @@ void transmission_module_update(void) {
     
     // Publish current transmission state to message bus (reduced frequency)
     static uint32_t last_publish_time = 0;
+    uint32_t now = millis();
     if (now - last_publish_time >= 50) {  // Publish every 50ms (20Hz) instead of every update
         publish_transmission_state();
         last_publish_time = now;
@@ -695,14 +591,9 @@ void transmission_set_overrun_override(overrun_clutch_state_t state, bool overri
         // Apply the manual override immediately
         set_overrun_clutch(state);
         
-        #ifdef ARDUINO
-        Serial.print("Overrun clutch manual override ENABLED: ");
-        Serial.println(transmission_overrun_to_string(state));
-        #endif
+        // Debug output removed to reduce serial clutter
     } else {
-        #ifdef ARDUINO
-        Serial.println("Overrun clutch manual override DISABLED - returning to automatic control");
-        #endif
+        // Debug output removed to reduce serial clutter
     }
 }
 
@@ -722,21 +613,7 @@ void transmission_set_overrun_tuning(float throttle_disengage_pct, float throttl
     overrun_braking_speed_threshold = (braking_speed_mph < 10.0f) ? 10.0f : 
                                      (braking_speed_mph > 100.0f) ? 100.0f : braking_speed_mph;
     
-    #ifdef ARDUINO
-    Serial.println("Overrun clutch tuning parameters updated:");
-    Serial.print("  Throttle disengage: ");
-    Serial.print(overrun_throttle_disengage_threshold);
-    Serial.println("%");
-    Serial.print("  Throttle engage: ");
-    Serial.print(overrun_throttle_engage_threshold);
-    Serial.println("%");
-    Serial.print("  Minimum speed: ");
-    Serial.print(overrun_minimum_speed_mph);
-    Serial.println(" mph");
-    Serial.print("  Braking speed threshold: ");
-    Serial.print(overrun_braking_speed_threshold);
-    Serial.println(" mph");
-    #endif
+    // Debug output removed to reduce serial clutter
 }
 
 void transmission_get_overrun_tuning(float* throttle_disengage_pct, float* throttle_engage_pct,
@@ -750,10 +627,7 @@ void transmission_get_overrun_tuning(float* throttle_disengage_pct, float* throt
 void transmission_set_lockup(bool engage) {
     // Publish lockup control message - output manager will handle the rest
     g_message_bus.publishFloat(MSG_TRANS_LOCKUP_SOL, engage ? 1.0f : 0.0f);
-    #ifdef ARDUINO
-    Serial.print("Lockup ");
-    Serial.println(engage ? "engaged" : "disengaged");
-    #endif
+    // Debug output removed to reduce serial clutter
 }
 
 void transmission_set_line_pressure(float pressure_percent) {
@@ -767,10 +641,7 @@ void transmission_set_solenoid_pattern(uint8_t gear) {
 void transmission_set_auto_shift(bool enable) {
     // Implementation depends on how automatic shifting is controlled
     // For now, just log the setting
-    #ifdef ARDUINO
-    Serial.print("Automatic shifting ");
-    Serial.println(enable ? "enabled" : "disabled");
-    #endif
+    // Debug output removed to reduce serial clutter
 }
 
 void transmission_outputs_safe_state(void) {
@@ -780,9 +651,7 @@ void transmission_outputs_safe_state(void) {
     transmission_set_lockup(false);       // Lockup disengaged
     set_overrun_clutch(OVERRUN_DISENGAGED); // Overrun clutch disengaged for safe operation
     
-    #ifdef ARDUINO
-    Serial.println("Transmission outputs set to safe state");
-    #endif
+    // Debug output removed to reduce serial clutter
 }
 
 // =============================================================================
@@ -801,34 +670,8 @@ static void init_transmission_temp_tables(void) {
         trans_temp_temp_table                       // Output temperature table
     );
     
-    #ifdef ARDUINO
-    Serial.print("Transmission temp sensor initialized, Beta = ");
-    Serial.println(beta);
-    Serial.print("Temperature range: ");
-    Serial.print(TRANS_TEMP_MIN_C);
-    Serial.print("°C to ");
-    Serial.print(TRANS_TEMP_MAX_C);
-    Serial.println("°C");
-    
-    // Debug: Show voltage range of lookup table
-    Serial.print("Voltage range: ");
-    Serial.print(trans_temp_voltage_table[0]);
-    Serial.print("V to ");
-    Serial.print(trans_temp_voltage_table[TRANS_TEMP_TABLE_SIZE-1]);
-    Serial.println("V");
-    
-    // Debug: Show a few table entries
-    Serial.println("Lookup table entries:");
-    for (uint8_t i = 0; i < TRANS_TEMP_TABLE_SIZE; i += 4) {  // Show every 4th entry
-        Serial.print("  [");
-        Serial.print(i);
-        Serial.print("] ");
-        Serial.print(trans_temp_voltage_table[i]);
-        Serial.print("V = ");
-        Serial.print(trans_temp_temp_table[i]);
-        Serial.println("°C");
-    }
-    #else
+    // Debug output removed to reduce serial clutter
+    #ifndef ARDUINO
     (void)beta;  // Suppress unused variable warning in tests
     #endif
 }
@@ -898,9 +741,7 @@ static void handle_paddle_upshift(const CANMessage* msg) {
             trans_state.last_paddle_time_ms = now_ms;
             shift_count++;
             
-            #ifdef ARDUINO
-            // Serial.println("Upshift paddle pressed");
-            #endif
+                    // Debug output removed to reduce serial clutter
         }
     }
 }
@@ -914,9 +755,7 @@ static void handle_paddle_downshift(const CANMessage* msg) {
             trans_state.last_paddle_time_ms = now_ms;
             shift_count++;
             
-            #ifdef ARDUINO
-            // Serial.println("Downshift paddle pressed");
-            #endif
+                    // Debug output removed to reduce serial clutter
         }
     }
 }
@@ -1026,10 +865,7 @@ static void update_gear_position(void) {
             // Set line pressure based on gear position
             set_line_pressure_for_gear(trans_state.current_gear);
             
-            #ifdef ARDUINO
-                    // Serial.print("Gear position changed to: ");
-        // Serial.println(transmission_gear_to_string(trans_state.current_gear));
-            #endif
+                    // Debug output removed to reduce serial clutter
         }
     } else {
         // Invalid state - multiple switches active or no switches active
@@ -1041,11 +877,7 @@ static void update_gear_position(void) {
         set_shift_solenoid_pattern(0);
         set_line_pressure_for_gear(GEAR_NEUTRAL);
         
-        #ifdef ARDUINO
-        // Serial.print("Invalid gear position - ");
-        // Serial.print(active_count);
-        // Serial.println(" switches active, defaulting to neutral");
-        #endif
+        // Debug output removed to reduce serial clutter
     }
 }
 
@@ -1053,9 +885,7 @@ static void process_shift_requests(void) {
     if (trans_state.shift_request != SHIFT_NONE) {
         // 1. Check if shifting is safe
         if (!is_shift_safe()) {
-            #ifdef ARDUINO
-            Serial.println("Shift request denied - conditions not safe");
-            #endif
+            // Debug output removed to reduce serial clutter
             transmission_clear_shift_request();
             return;
         }
@@ -1069,16 +899,9 @@ static void process_shift_requests(void) {
         }
         
         if (shift_successful) {
-            #ifdef ARDUINO
-                    // Serial.print("Executed ");
-        // Serial.print(trans_state.shift_request == SHIFT_UP ? "upshift" : "downshift");
-        // Serial.print(" to automatic gear ");
-        // Serial.println(current_auto_gear);
-            #endif
+            // Debug output removed to reduce serial clutter
         } else {
-            #ifdef ARDUINO
-            Serial.println("Shift execution failed");
-            #endif
+            // Debug output removed to reduce serial clutter
         }
         
         // 3. Clear the shift request
@@ -1141,10 +964,7 @@ static bool execute_upshift(void) {
     set_shift_solenoid_pattern(current_auto_gear);
     // Line pressure remains at 100% for all moving gears
     
-    #ifdef ARDUINO
-            // Serial.print("Upshift executed: Drive gear ");
-        // Serial.println(current_auto_gear);
-    #endif
+            // Debug output removed to reduce serial clutter
     
     return true;
 }
@@ -1163,10 +983,7 @@ static bool execute_downshift(void) {
     set_shift_solenoid_pattern(current_auto_gear);
     // Line pressure remains at 100% for all moving gears
     
-    #ifdef ARDUINO
-            // Serial.print("Downshift executed: Drive gear ");
-        // Serial.println(current_auto_gear);
-    #endif
+            // Debug output removed to reduce serial clutter
     
     return true;
 }
@@ -1232,16 +1049,7 @@ static void set_shift_solenoid_pattern(uint8_t gear) {
         last_lockup_state = lockup_state;
     }
                             
-    #ifdef ARDUINO
-            // Serial.print("Solenoids - Gear ");
-        // Serial.print(gear);
-        // Serial.print(": A=");
-        // Serial.print(sol_a_state ? "ON" : "OFF");
-        // Serial.print(", B=");
-        // Serial.print(sol_b_state ? "ON" : "OFF");
-        // Serial.print(", Lockup=");
-        // Serial.println(lockup_state ? "ON" : "OFF");
-    #endif
+            // Debug output removed to reduce serial clutter
 }
 
 static void set_line_pressure_for_gear(gear_position_t gear) {
@@ -1264,13 +1072,7 @@ static void set_line_pressure_for_gear(gear_position_t gear) {
         g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent);
         last_pressure_percent = pressure_percent;
                             
-        #ifdef ARDUINO
-        Serial.print("GEAR PRESSURE PUBLISHED: ");
-        Serial.print(transmission_gear_to_string(gear));
-        Serial.print(" = ");
-        Serial.print(pressure_percent * 100.0f);
-        Serial.println("%");
-        #endif
+        // Debug output removed to reduce serial clutter
     }
 }
 
@@ -1283,11 +1085,7 @@ static void set_line_pressure(float pressure_percent) {
     // Publish pressure control message
     g_message_bus.publishFloat(MSG_TRANS_PRESSURE_SOL, pressure_percent);
                             
-    #ifdef ARDUINO
-            // Serial.print("Line pressure manually set to: ");
-        // Serial.print(pressure_percent * 100.0f);
-        // Serial.println("%");
-    #endif
+            // Debug output removed to reduce serial clutter
 }
 
 // =============================================================================
@@ -1418,13 +1216,7 @@ static void set_overrun_clutch(overrun_clutch_state_t state) {
     // Send control message to output manager
     g_message_bus.publishFloat(MSG_TRANS_OVERRUN_SOL, solenoid_power ? 1.0f : 0.0f);
     
-    #ifdef ARDUINO
-            // Serial.print("Overrun clutch ");
-        // Serial.print(transmission_overrun_to_string(state));
-        // Serial.print(" (solenoid ");
-        // Serial.print(solenoid_power ? "ON-12V" : "OFF-0V");
-        // Serial.println(")");
-    #endif
+            // Debug output removed to reduce serial clutter
 }
 
 static void update_overrun_clutch_control(void) {
@@ -1440,12 +1232,8 @@ static void update_overrun_clutch_control(void) {
         // Apply the new state to the hardware
         set_overrun_clutch(desired_state);
         
-        #ifdef ARDUINO
-        // Serial.print("Overrun clutch state changed: ");
-        // Serial.print(transmission_overrun_to_string(previous_state));
-        // Serial.print(" → ");
-        // Serial.println(transmission_overrun_to_string(desired_state));
-        #else
+        // Debug output removed to reduce serial clutter
+        #ifndef ARDUINO
         // Suppress unused variable warning in non-Arduino builds
         (void)previous_state;
         #endif

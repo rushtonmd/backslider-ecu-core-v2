@@ -14,7 +14,10 @@ MessageBus::MessageBus() :
     queue_head(0),
     queue_tail(0),
     messages_processed(0),
-    queue_overflows(0)
+    queue_overflows(0),
+    messages_published(0),
+    messages_per_second(0),
+    last_stats_reset_ms(0)
 {
     // Initialize subscriber array
     for (uint8_t i = 0; i < MAX_SUBSCRIBERS; i++) {
@@ -88,6 +91,9 @@ bool MessageBus::publish(uint32_t msg_id, const void* data, uint8_t length) {
         return false;
     }
     
+    // Track message count
+    messages_published++;
+    
     return true;
 }
 
@@ -110,6 +116,14 @@ bool MessageBus::publishUint8(uint32_t msg_id, uint8_t value) {
 void MessageBus::process() {
     // Process internal message queue
     process_internal_queue();
+    
+    // Update messages per second statistics
+    uint32_t now_ms = millis();
+    if (now_ms - last_stats_reset_ms >= 1000) {  // Every second
+        messages_per_second = messages_published;
+        messages_published = 0;  // Reset counter
+        last_stats_reset_ms = now_ms;
+    }
 }
 
 // Private methods
@@ -194,6 +208,9 @@ bool MessageBus::isQueueFull() const {
 void MessageBus::resetStatistics() {
     messages_processed = 0;
     queue_overflows = 0;
+    messages_published = 0;
+    messages_per_second = 0;
+    last_stats_reset_ms = millis();
 }
 
 void MessageBus::resetSubscribers() {
