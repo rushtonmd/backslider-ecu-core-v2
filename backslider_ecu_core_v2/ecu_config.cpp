@@ -161,7 +161,7 @@ const ECUConfiguration ECU_TRANSMISSION_CONFIG = {
         .baudrate = 500000,           // 500 kbps - standard automotive CAN
         .enable_obdii = true,        // Disable OBD-II for now
         .enable_custom_messages = true, // Disable custom messages for now
-        .can_bus_number = 1,          // CAN1
+        .can_bus_number = 2,          // CAN2
         .cache_default_max_age_ms = 1000 // 1 second cache timeout
     },
     

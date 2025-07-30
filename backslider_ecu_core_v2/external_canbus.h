@@ -154,6 +154,9 @@ public:
     #endif
     #endif
     
+    // Temporary testing functions
+    void test_can_reception();
+    
 private:
     // =========================================================================
     // HARDWARE INTERFACE

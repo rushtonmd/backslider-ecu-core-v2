@@ -39,6 +39,13 @@ bool CustomCanBusManager::init() {
     
     debug_print("CustomCanBusManager: Initializing...");
     
+    #ifdef ARDUINO
+    Serial.print("CustomCanBusManager: Mapping count: ");
+    Serial.println(mapping_count);
+    #else
+    printf("CustomCanBusManager: Mapping count: %d\n", mapping_count);
+    #endif
+    
     // Set global instance pointer for callback
     g_manager_instance = this;
     
@@ -57,6 +64,14 @@ bool CustomCanBusManager::init() {
                 mappings[i].basic.external_can_id, 
                 message_handler_wrapper)) {
                 debug_print("CustomCanBusManager: Warning - Failed to register handler");
+            } else {
+                #ifdef ARDUINO
+                Serial.print("CustomCanBusManager: Successfully registered handler for CAN ID 0x");
+                Serial.println(mappings[i].basic.external_can_id, HEX);
+                #else
+                printf("CustomCanBusManager: Successfully registered handler for CAN ID 0x%08X\n", 
+                       mappings[i].basic.external_can_id);
+                #endif
             }
         }
     }
@@ -288,7 +303,22 @@ bool CustomCanBusManager::load_configuration() {
 // =============================================================================
 
 void CustomCanBusManager::handle_can_message(uint32_t can_id, const uint8_t* data, uint8_t length) {
+    #ifdef ARDUINO
+    Serial.print("DEBUG: handle_can_message called for CAN ID 0x");
+    Serial.print(can_id, HEX);
+    Serial.print(" with ");
+    Serial.print(length);
+    Serial.println(" bytes");
+    #else
+    printf("DEBUG: handle_can_message called for CAN ID 0x%08X with %d bytes\n", can_id, length);
+    #endif
+    
     if (!initialized) {
+        #ifdef ARDUINO
+        Serial.println("DEBUG: CustomCanBusManager not initialized!");
+        #else
+        printf("DEBUG: CustomCanBusManager not initialized!\n");
+        #endif
         return;
     }
     
@@ -296,29 +326,94 @@ void CustomCanBusManager::handle_can_message(uint32_t can_id, const uint8_t* dat
     
     // Find mapping for this CAN ID
     int mapping_index = find_mapping_by_can_id(can_id);
+    #ifdef ARDUINO
+    Serial.print("DEBUG: Mapping index for CAN 0x");
+    Serial.print(can_id, HEX);
+    Serial.print(": ");
+    Serial.println(mapping_index);
+    #else
+    printf("DEBUG: Mapping index for CAN 0x%08X: %d\n", can_id, mapping_index);
+    #endif
+    
     if (mapping_index < 0) {
         stats.unknown_messages++;
+        #ifdef ARDUINO
+        // DEBUG: Show unmapped CAN messages
+        Serial.print("CustomCanBusManager: No mapping for CAN 0x");
+        Serial.print(can_id, HEX);
+        Serial.println(" (unknown message)");
+        #else
+        printf("CustomCanBusManager: No mapping for CAN 0x%08X (unknown message)\n", can_id);
+        #endif
         return;
     }
     
     const can_mapping_t& mapping = mappings[mapping_index];
     
+    #ifdef ARDUINO
+    Serial.print("DEBUG: Mapping found - enabled: ");
+    Serial.println(mapping.enabled ? "YES" : "NO");
+    #else
+    printf("DEBUG: Mapping found - enabled: %s\n", mapping.enabled ? "YES" : "NO");
+    #endif
+    
     if (!mapping.enabled) {
+        #ifdef ARDUINO
+        Serial.println("DEBUG: Mapping is disabled, returning");
+        #else
+        printf("DEBUG: Mapping is disabled, returning\n");
+        #endif
         return;  // Mapping is disabled
     }
     
     // Extract value from CAN message
     float value = 0.0f;
+    #ifdef ARDUINO
+    Serial.println("DEBUG: About to extract value from CAN data");
+    #else
+    printf("DEBUG: About to extract value from CAN data\n");
+    #endif
+    
     if (!extract_value(data, length, mapping, &value)) {
         // Extraction failed - error already logged in extract_value
+        #ifdef ARDUINO
+        Serial.println("DEBUG: Value extraction failed");
+        #else
+        printf("DEBUG: Value extraction failed\n");
+        #endif
         return;
     }
     
+    #ifdef ARDUINO
+    Serial.print("DEBUG: Value extracted successfully: ");
+    Serial.println(value);
+    #else
+    printf("DEBUG: Value extracted successfully: %.2f\n", value);
+    #endif
+    
     // Validate extracted value
+    #ifdef ARDUINO
+    Serial.print("DEBUG: About to validate value: ");
+    Serial.println(value);
+    #else
+    printf("DEBUG: About to validate value: %.2f\n", value);
+    #endif
+    
     if (!validate_value(value, mapping)) {
         stats.validation_errors++;
+        #ifdef ARDUINO
+        Serial.println("DEBUG: Value validation failed");
+        #else
+        printf("DEBUG: Value validation failed\n");
+        #endif
         return;
     }
+    
+    #ifdef ARDUINO
+    Serial.println("DEBUG: Value validation passed");
+    #else
+    printf("DEBUG: Value validation passed\n");
+    #endif
     
     // Publish to internal message bus
     g_message_bus.publishFloat(mapping.basic.internal_msg_id, value);
@@ -326,12 +421,17 @@ void CustomCanBusManager::handle_can_message(uint32_t can_id, const uint8_t* dat
     stats.messages_translated++;
     
     #ifdef ARDUINO
-    // Serial.print("CustomCanBusManager: CAN 0x");
-    // Serial.print(can_id, HEX);
-    // Serial.print(" -> MSG 0x");
-    // Serial.print(mapping.basic.internal_msg_id, HEX);
-    // Serial.print(" = ");
-    // Serial.println(value);
+    // DEBUG: Show successful translation
+    Serial.print("CustomCanBusManager: CAN 0x");
+    Serial.print(can_id, HEX);
+    Serial.print(" -> MSG 0x");
+    Serial.print(mapping.basic.internal_msg_id, HEX);
+    Serial.print(" = ");
+    Serial.print(value);
+    Serial.println(" (translated successfully)");
+    #else
+    printf("CustomCanBusManager: CAN 0x%08X -> MSG 0x%08X = %.2f (translated successfully)\n", 
+           can_id, mapping.basic.internal_msg_id, value);
     #endif
 }
 
@@ -423,6 +523,15 @@ int CustomCanBusManager::find_mapping_by_can_id(uint32_t can_id) {
         }
     }
     return -1;
+}
+
+bool CustomCanBusManager::has_mapping_for_can_id(uint32_t can_id) const {
+    for (uint8_t i = 0; i < mapping_count; i++) {
+        if (mappings[i].basic.external_can_id == can_id && mappings[i].enabled) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool CustomCanBusManager::is_mapping_valid(const can_mapping_t& mapping) {
@@ -586,6 +695,16 @@ void CustomCanBusManager::debug_print_mapping(const can_mapping_t& mapping) {
 // =============================================================================
 
 void CustomCanBusManager::simulate_can_message(uint32_t can_id, const uint8_t* data, uint8_t length) {
+    #ifdef ARDUINO
+    Serial.print("DEBUG: simulate_can_message called for CAN ID 0x");
+    Serial.print(can_id, HEX);
+    Serial.print(" with ");
+    Serial.print(length);
+    Serial.println(" bytes");
+    #else
+    printf("DEBUG: simulate_can_message called for CAN ID 0x%08X with %d bytes\n", can_id, length);
+    #endif
+    
     handle_can_message(can_id, data, length);
 }
 

@@ -318,4 +318,26 @@ bool transmission_get_brake_pedal_active(void);
  */
 bool transmission_is_decelerating(void);
 
+// =============================================================================
+// TEMPORARY TESTING FUNCTIONS
+// =============================================================================
+
+/**
+ * Test function to verify CAN bus data is being received and processed
+ * Prints current cached values and timing information
+ */
+void transmission_test_can_data(void);
+
+/**
+ * Test function to verify CAN mapping configuration
+ * Prints current mapping settings
+ */
+void transmission_test_can_mapping(void);
+
+/**
+ * Test function to simulate throttle position CAN message
+ * @param throttle_percent Throttle position to simulate (0.0-100.0%)
+ */
+void transmission_test_simulate_throttle(float throttle_percent);
+
 #endif // TRANSMISSION_MODULE_H

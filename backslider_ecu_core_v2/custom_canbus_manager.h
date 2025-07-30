@@ -135,6 +135,9 @@ public:
     uint8_t get_mapping_count() const { return mapping_count; }
     bool get_mapping(uint8_t index, can_mapping_t* mapping) const;
     
+    // Check if a mapping exists for a specific CAN ID
+    bool has_mapping_for_can_id(uint32_t can_id) const;
+    
     // Clear all mappings
     void clear_all_mappings();
     

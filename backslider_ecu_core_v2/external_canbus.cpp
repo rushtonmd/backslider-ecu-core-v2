@@ -4,6 +4,7 @@
 #include "external_canbus.h"
 #include "obdii_handler.h"
 #include "custom_message_handler.h"
+#include "custom_canbus_manager.h"
 #include "parameter_helpers.h"
 #include <map>
 
@@ -350,7 +351,30 @@ void ExternalCanBus::process_outgoing_messages() {
 }
 
 void ExternalCanBus::route_incoming_message(const CAN_message_t& msg) {
-    // debug_print_message(msg, "Received");
+    // TEMPORARY DEBUG: Print ALL incoming CAN messages to see what we're receiving
+    static uint32_t last_can_debug_time = 0;
+    uint32_t now = millis();
+    if (now - last_can_debug_time >= 500) {  // Every 500ms to avoid flooding
+        #ifdef ARDUINO
+        Serial.print("CAN RAW: ID=0x");
+        Serial.print(msg.id, HEX);
+        Serial.print(" len=");
+        Serial.print(msg.len);
+        Serial.print(" data=");
+        for (int i = 0; i < msg.len; i++) {
+            Serial.print(" ");
+            Serial.print(msg.buf[i], HEX);
+        }
+        Serial.println();
+        #else
+        printf("CAN RAW: ID=0x%08X len=%d data:", msg.id, msg.len);
+        for (int i = 0; i < msg.len; i++) {
+            printf(" %02X", msg.buf[i]);
+        }
+        printf("\n");
+        #endif
+        last_can_debug_time = now;
+    }
     
     // Check if it's an OBD-II request
     if (obdii_enabled && is_obdii_message(msg)) {
@@ -361,19 +385,45 @@ void ExternalCanBus::route_incoming_message(const CAN_message_t& msg) {
         return;
     }
     
-    // Check if it's a parameter message - route to internal message bus
-    if (is_parameter_message(msg)) {
-        route_parameter_message(msg);
-        stats.parameter_messages++;
-        return;
-    }
-    
-    // Check if it's a custom message
+    // Check if it's a custom message FIRST (before parameter messages)
     if (custom_messages_enabled && is_custom_message(msg)) {
+        // CRITICAL FIX: Check if CustomCanBusManager has a mapping for this CAN ID
+        // If so, let it handle the message instead of CustomMessageHandler
+        extern CustomCanBusManager g_custom_canbus_manager;
+        
+        // DEBUG: Check if we have a mapping for this CAN ID
+        bool has_mapping = g_custom_canbus_manager.has_mapping_for_can_id(msg.id);
+        #ifdef ARDUINO
+        static uint32_t last_debug_time = 0;
+        uint32_t now = millis();
+        if (now - last_debug_time >= 1000) {  // Every 1 second
+            Serial.print("DEBUG: CAN ID 0x");
+            Serial.print(msg.id, HEX);
+            Serial.print(" has mapping: ");
+            Serial.println(has_mapping ? "YES" : "NO");
+            last_debug_time = now;
+        }
+        #endif
+        
+        if (has_mapping) {
+            // Let CustomCanBusManager handle this message
+            g_custom_canbus_manager.simulate_can_message(msg.id, msg.buf, msg.len);
+            stats.custom_messages++;
+            return;
+        }
+        
+        // Otherwise, let CustomMessageHandler handle it
         if (custom_handler != nullptr) {
             custom_handler->process_message(msg);
             stats.custom_messages++;
         }
+        return;
+    }
+    
+    // Check if it's a parameter message - route to internal message bus
+    if (is_parameter_message(msg)) {
+        route_parameter_message(msg);
+        stats.parameter_messages++;
         return;
     }
     
@@ -392,8 +442,8 @@ bool ExternalCanBus::is_custom_message(const CAN_message_t& msg) {
 }
 
 bool ExternalCanBus::is_parameter_message(const CAN_message_t& msg) {
-    // Parameter messages use the parameter_msg_t structure
-    return (msg.len == sizeof(parameter_msg_t));
+    // Parameter messages use extended CAN IDs and the parameter_msg_t structure
+    return (msg.flags.extended && msg.len == sizeof(parameter_msg_t));
 }
 
 void ExternalCanBus::route_parameter_message(const CAN_message_t& msg) {
@@ -825,4 +875,43 @@ void ExternalCanBus::on_internal_message_published(const CANMessage* msg) {
     if (g_canbus_instance && g_canbus_instance->initialized) {
         g_canbus_instance->on_message_bus_message(msg);
     }
+}
+
+// ============================================================================
+// TEMPORARY TESTING FUNCTIONS
+// ============================================================================
+
+void ExternalCanBus::test_can_reception() {
+    // Test function to check if CAN bus is receiving any messages
+    uint32_t now = millis();
+    
+    #ifdef ARDUINO
+    Serial.println("=== EXTERNAL CAN BUS TEST ===");
+    Serial.print("Initialized: ");
+    Serial.println(initialized ? "YES" : "NO");
+    Serial.print("Enabled: ");
+    Serial.println(config.enabled ? "YES" : "NO");
+    Serial.print("CAN Bus Number: ");
+    Serial.println(config.can_bus_number);
+    Serial.print("Baudrate: ");
+    Serial.println(config.baudrate);
+    Serial.print("Messages Received: ");
+    Serial.println(stats.messages_received);
+    Serial.print("Last Message Time: ");
+    Serial.print(now - last_message_time);
+    Serial.println("ms ago");
+    Serial.print("Messages Received: ");
+    Serial.println(stats.messages_received);
+    Serial.println("=============================");
+    #else
+    printf("=== EXTERNAL CAN BUS TEST ===\n");
+    printf("Initialized: %s\n", initialized ? "YES" : "NO");
+    printf("Enabled: %s\n", config.enabled ? "YES" : "NO");
+    printf("CAN Bus Number: %d\n", config.can_bus_number);
+    printf("Baudrate: %d\n", config.baudrate);
+    printf("Messages Received: %lu\n", stats.messages_received);
+    printf("Last Message Time: %lu ms ago\n", now - last_message_time);
+    printf("Messages Received: %lu\n", stats.messages_received);
+    printf("=============================\n");
+    #endif
 }

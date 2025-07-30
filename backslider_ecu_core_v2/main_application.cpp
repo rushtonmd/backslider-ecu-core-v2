@@ -18,6 +18,7 @@
 #include "parameter_registry.h"
 #include "external_message_broadcasting.h"
 #include "pin_assignments.h"
+#include "custom_canbus_manager.h"
 
 // TODO: Create engine_sensors.h when ready
 // TODO: Create transmission_sensors.h when ready
@@ -56,6 +57,7 @@ void MainApplication::init() {
     // Initialize serial communication
     Serial.begin(115200);  // Revert to standard baud rate
     Serial.println("=== Backslider ECU Starting ===");
+    Serial.println("DEBUG: MainApplication::init() is being called!");
     
     // Note: LED initialization removed to avoid pin conflicts
     #endif
@@ -294,6 +296,19 @@ void MainApplication::init() {
     
     // Set up external interfaces for broadcasting
     ExternalMessageBroadcasting::set_external_interfaces(&g_external_canbus, &g_external_serial);
+    
+    // DEBUG: Check if we're reaching this point
+    Serial.println("DEBUG: About to initialize CustomCanBusManager...");
+    
+    // Initialize custom CAN bus manager FIRST (before transmission module)
+    Serial.println("=== ABOUT TO INITIALIZE CUSTOM CAN BUS MANAGER ===");
+    Serial.println("Initializing custom CAN bus manager...");
+    Serial.println("  - About to call g_custom_canbus_manager.init()...");
+    bool custom_canbus_result = g_custom_canbus_manager.init();
+    Serial.print("  - g_custom_canbus_manager.init() returned: ");
+    Serial.println(custom_canbus_result ? "true" : "false");
+    Serial.println("Custom CAN bus manager initialized");
+    Serial.println("=== CUSTOM CAN BUS MANAGER INITIALIZATION COMPLETE ===");
     
     // Initialize transmission module
     Serial.println("Initializing transmission module...");

@@ -98,6 +98,19 @@ bool MessageBus::publish(uint32_t msg_id, const void* data, uint8_t length) {
 }
 
 bool MessageBus::publishFloat(uint32_t msg_id, float value) {
+    // DEBUG: Show throttle position messages specifically
+    #ifdef ARDUINO
+    if (msg_id == MSG_THROTTLE_POSITION) {
+        Serial.print("MessageBus: Published MSG_THROTTLE_POSITION = ");
+        Serial.print(value);
+        Serial.println("%");
+    }
+    #else
+    if (msg_id == MSG_THROTTLE_POSITION) {
+        printf("MessageBus: Published MSG_THROTTLE_POSITION = %.2f%%\n", value);
+    }
+    #endif
+    
     return publish(msg_id, &value, sizeof(float));
 }
 

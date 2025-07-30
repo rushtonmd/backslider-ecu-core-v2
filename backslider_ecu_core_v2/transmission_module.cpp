@@ -485,9 +485,9 @@ static void configure_external_canbus_mappings(void) {
     can_mapping_t throttle_mapping = create_can_mapping(
         0x360,                      // External CAN ID (Haltech throttle position)
         MSG_THROTTLE_POSITION,      // Internal message ID
-        0,                          // Start at byte 0
+        4,                          // Start at byte 4 (Throttle Position)
         2,                          // 2 bytes long
-        false,                      // Little endian
+        true,                       // Big endian (Haltech specification)
         0.1f,                       // Scale factor (raw * 0.1 = percentage)
         0.0f,                       // Min value
         100.0f                      // Max value
@@ -496,6 +496,8 @@ static void configure_external_canbus_mappings(void) {
     // Add the mapping to the custom CAN bus manager
     if (g_custom_canbus_manager.add_mapping(throttle_mapping)) {
         // Debug output removed to reduce serial clutter
+        // Note: The routing logic in ExternalCanBus now automatically prioritizes
+        // CustomCanBusManager over CustomMessageHandler for mapped CAN IDs
     } else {
         // Debug output removed to reduce serial clutter
     }
@@ -624,6 +626,103 @@ void transmission_get_overrun_tuning(float* throttle_disengage_pct, float* throt
     if (braking_speed_mph) *braking_speed_mph = overrun_braking_speed_threshold;
 }
 
+// =============================================================================
+// TEMPORARY TESTING FUNCTIONS
+// =============================================================================
+
+void transmission_test_can_data(void) {
+    // Test function to verify CAN bus data is being received and processed
+    uint32_t now = millis();
+    
+    #ifdef ARDUINO
+    Serial.println("=== TRANSMISSION CAN DATA TEST ===");
+    Serial.print("Current time: ");
+    Serial.println(now);
+    Serial.print("Throttle position: ");
+    Serial.print(cached_throttle_position);
+    Serial.print("% (last update: ");
+    Serial.print(now - last_throttle_update_ms);
+    Serial.println("ms ago)");
+    Serial.print("Vehicle speed: ");
+    Serial.print(cached_vehicle_speed);
+    Serial.print(" mph (last update: ");
+    Serial.print(now - last_speed_update_ms);
+    Serial.println("ms ago)");
+    Serial.print("Brake pedal: ");
+    Serial.print(cached_brake_active ? "ACTIVE" : "inactive");
+    Serial.print(" (last update: ");
+    Serial.print(now - last_brake_update_ms);
+    Serial.println("ms ago)");
+    Serial.print("Data timeout: ");
+    Serial.print(EXTERNAL_DATA_TIMEOUT_MS);
+    Serial.println("ms");
+    Serial.println("==================================");
+    #else
+    printf("=== TRANSMISSION CAN DATA TEST ===\n");
+    printf("Current time: %lu\n", now);
+    printf("Throttle position: %.1f%% (last update: %lu ms ago)\n", 
+           cached_throttle_position, now - last_throttle_update_ms);
+    printf("Vehicle speed: %.1f mph (last update: %lu ms ago)\n", 
+           cached_vehicle_speed, now - last_speed_update_ms);
+    printf("Brake pedal: %s (last update: %lu ms ago)\n", 
+           cached_brake_active ? "ACTIVE" : "inactive", now - last_brake_update_ms);
+    printf("Data timeout: %d ms\n", EXTERNAL_DATA_TIMEOUT_MS);
+    printf("==================================\n");
+    #endif
+}
+
+void transmission_test_can_mapping(void) {
+    // Test function to verify CAN mapping configuration
+    #ifdef ARDUINO
+    Serial.println("=== CAN MAPPING TEST ===");
+    Serial.println("Current mappings:");
+    Serial.println("1. Haltech CAN ID 0x360 -> MSG_THROTTLE_POSITION");
+    Serial.println("   - Bytes 0-1, Little endian, Scale 0.1");
+    Serial.println("   - Range: 0.0% to 100.0%");
+    Serial.println("==========================");
+    #else
+    printf("=== CAN MAPPING TEST ===\n");
+    printf("Current mappings:\n");
+    printf("1. Haltech CAN ID 0x360 -> MSG_THROTTLE_POSITION\n");
+    printf("   - Bytes 0-1, Little endian, Scale 0.1\n");
+    printf("   - Range: 0.0%% to 100.0%%\n");
+    printf("==========================\n");
+    #endif
+}
+
+void transmission_test_simulate_throttle(float throttle_percent) {
+    // Test function to simulate throttle position CAN message
+    // This helps verify the mapping and processing without real CAN hardware
+    
+    // Clamp throttle to valid range
+    if (throttle_percent < 0.0f) throttle_percent = 0.0f;
+    if (throttle_percent > 100.0f) throttle_percent = 100.0f;
+    
+    // Convert to raw CAN data (little endian, 2 bytes, scale 0.1)
+    uint16_t raw_value = (uint16_t)(throttle_percent * 10.0f);  // Scale by 10 for 0.1 resolution
+    uint8_t can_data[8] = {0};
+    can_data[0] = raw_value & 0xFF;        // Low byte
+    can_data[1] = (raw_value >> 8) & 0xFF; // High byte
+    
+    #ifdef ARDUINO
+    Serial.print("SIMULATING: Throttle ");
+    Serial.print(throttle_percent);
+    Serial.print("% (raw: 0x");
+    Serial.print(raw_value, HEX);
+    Serial.print(" = ");
+    Serial.print(can_data[0], HEX);
+    Serial.print(" ");
+    Serial.print(can_data[1], HEX);
+    Serial.println(")");
+    #else
+    printf("SIMULATING: Throttle %.1f%% (raw: 0x%04X = %02X %02X)\n", 
+           throttle_percent, raw_value, can_data[0], can_data[1]);
+    #endif
+    
+    // Simulate the CAN message
+    g_custom_canbus_manager.simulate_can_message(0x360, can_data, 8);
+}
+
 void transmission_set_lockup(bool engage) {
     // Publish lockup control message - output manager will handle the rest
     g_message_bus.publishFloat(MSG_TRANS_LOCKUP_SOL, engage ? 1.0f : 0.0f);
@@ -718,8 +817,37 @@ static void handle_trans_fluid_temp(const CANMessage* msg) {
 }
 
 static void handle_throttle_position(const CANMessage* msg) {
-    cached_throttle_position = MSG_UNPACK_FLOAT(msg);
+    float new_throttle = MSG_UNPACK_FLOAT(msg);
+    cached_throttle_position = new_throttle;
     last_throttle_update_ms = millis();
+    
+    // TEMPORARY DEBUG: Print throttle position every 100ms to verify CAN data
+    static uint32_t last_debug_time = 0;
+    uint32_t now = millis();
+    if (now - last_debug_time >= 100) {  // Every 100ms
+        #ifdef ARDUINO
+        Serial.print("CAN DEBUG: Throttle = ");
+        Serial.print(new_throttle);
+        Serial.print("% (raw msg: 0x");
+        Serial.print(msg->id, HEX);
+        Serial.print(" len:");
+        Serial.print(msg->len);
+        Serial.print(" data:");
+        for (int i = 0; i < msg->len; i++) {
+            Serial.print(" ");
+            Serial.print(msg->buf[i], HEX);
+        }
+        Serial.println(")");
+        #else
+        printf("CAN DEBUG: Throttle = %.1f%% (raw msg: 0x%08X len:%d data:", 
+               new_throttle, msg->id, msg->len);
+        for (int i = 0; i < msg->len; i++) {
+            printf(" %02X", msg->buf[i]);
+        }
+        printf(")\n");
+        #endif
+        last_debug_time = now;
+    }
 }
 
 static void handle_vehicle_speed(const CANMessage* msg) {
