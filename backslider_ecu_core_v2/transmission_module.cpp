@@ -87,7 +87,7 @@ static float overrun_braking_speed_threshold = OVERRUN_BRAKING_SPEED_THRESHOLD;
 static float overrun_moderate_throttle_threshold = OVERRUN_MODERATE_THROTTLE_THRESHOLD;
 
 // External data caching for overrun control (from message bus)
-#define EXTERNAL_DATA_TIMEOUT_MS 500  // 500ms timeout for external data validity
+#define EXTERNAL_DATA_TIMEOUT_MS 3000  // 3 second timeout for external data validity (longer than frequency counter timeout)
 static float cached_throttle_position = 20.0f;  // Safe default
 static float cached_vehicle_speed = 35.0f;      // Safe default
 static bool cached_brake_active = false;        // Safe default
@@ -221,10 +221,10 @@ static void init_transmission_sensor_array(sensor_definition_t* sensors,
     sensors[8].name = "Trans First Switch";
 
     // Vehicle speed sensor (Hall effect frequency sensor on pin 6)
-    sensors[9].pin = PIN_VEHICLE_SPEED;
+    sensors[9].pin = PIN_TRANS_INPUT_SPEED;
     sensors[9].type = SENSOR_FREQUENCY_COUNTER;
-    sensors[9].config.frequency.pulses_per_unit = 4;              // 4 pulses per revolution (typical VSS)
-    sensors[9].config.frequency.scaling_factor = 0.01f;          // Scale to MPH/KPH
+    sensors[9].config.frequency.pulses_per_unit = 5000;              // 4 pulses per revolution (typical VSS)
+    sensors[9].config.frequency.scaling_factor = 60;          // Scale to MPH/KPH
     sensors[9].config.frequency.timeout_us = 2000000;            // 2 second timeout (vehicle stopped)
     sensors[9].config.frequency.message_update_rate_hz = 1;      // 1Hz message rate for debugging
     sensors[9].config.frequency.use_interrupts = 1;             // Use high-speed interrupts
@@ -851,8 +851,28 @@ static void handle_throttle_position(const CANMessage* msg) {
 }
 
 static void handle_vehicle_speed(const CANMessage* msg) {
-    cached_vehicle_speed = MSG_UNPACK_FLOAT(msg);
+    float unpacked_value = MSG_UNPACK_FLOAT(msg);
+    cached_vehicle_speed = unpacked_value;
     last_speed_update_ms = millis();
+    
+    #ifdef ARDUINO
+    Serial.print("DEBUG: Transmission module received vehicle speed message - CAN ID: 0x");
+    Serial.print(msg->id, HEX);
+    Serial.print(", len: ");
+    Serial.print(msg->len);
+    Serial.print(", data bytes: ");
+    for (int i = 0; i < msg->len && i < 8; i++) {
+        Serial.print("0x");
+        Serial.print(msg->buf[i], HEX);
+        Serial.print(" ");
+    }
+    Serial.print(", unpacked value: ");
+    Serial.print(unpacked_value);
+    Serial.print(" KPH, cached value: ");
+    Serial.print(cached_vehicle_speed);
+    Serial.print(" KPH, timestamp: ");
+    Serial.println(last_speed_update_ms);
+    #endif
 }
 
 static void handle_brake_pedal(const CANMessage* msg) {
@@ -934,11 +954,50 @@ static float get_throttle_position_with_timeout(void) {
 static float get_vehicle_speed_with_timeout(void) {
     uint32_t now_ms = millis();
     
-    // Check if data is fresh (within timeout)
+    // First, try to get the current frequency directly from the input manager
+    uint32_t current_frequency = input_manager_get_current_frequency(MSG_VEHICLE_SPEED);
+    
+    if (current_frequency > 0) {
+        // Calculate speed from current frequency using the same calibration as the sensor
+        float base_value = (float)current_frequency * 60.0f / 5000.0f;  // pulses_per_unit = 5000
+        float current_speed = base_value * 60.0f;  // scaling_factor = 60
+        
+        #ifdef ARDUINO
+        static uint32_t last_debug_time = 0;
+        if (now_ms - last_debug_time >= 1000) {  // Every second
+            Serial.print("DEBUG: Parameter request for vehicle speed - using current frequency: ");
+            Serial.print(current_frequency);
+            Serial.print(" Hz, calculated speed: ");
+            Serial.print(current_speed);
+            Serial.println(" KPH");
+            last_debug_time = now_ms;
+        }
+        #endif
+        
+        return current_speed;
+    }
+    
+    // Fallback to cached value if frequency is 0 (vehicle stopped)
     if (now_ms - last_speed_update_ms < EXTERNAL_DATA_TIMEOUT_MS) {
+        #ifdef ARDUINO
+        static uint32_t last_debug_time = 0;
+        if (now_ms - last_debug_time >= 1000) {  // Every second
+            Serial.print("DEBUG: Parameter request for vehicle speed - returning cached value: ");
+            Serial.print(cached_vehicle_speed);
+            Serial.print(" KPH (last update: ");
+            Serial.print(now_ms - last_speed_update_ms);
+            Serial.println(" ms ago)");
+            last_debug_time = now_ms;
+        }
+        #endif
         return cached_vehicle_speed;
     } else {
         // Return safe default if data is stale
+        #ifdef ARDUINO
+        Serial.print("DEBUG: Parameter request for vehicle speed - data stale, returning default: 35.0 KPH (last update: ");
+        Serial.print(now_ms - last_speed_update_ms);
+        Serial.println(" ms ago)");
+        #endif
         return 35.0f;  // Safe moderate speed default
     }
 }
@@ -1046,15 +1105,8 @@ static void publish_transmission_state(void) {
     g_message_bus.publishFloat(MSG_TRANS_OVERRUN_STATE, (float)trans_state.overrun_state);
     
     // Publish vehicle speed - get from sensor or default to 0.0 when stopped
-    float vehicle_speed = 0.0f;  // Default for stopped vehicle
-    int8_t speed_sensor_index = input_manager_find_sensor_by_msg_id(MSG_VEHICLE_SPEED);
-    if (speed_sensor_index >= 0) {
-        sensor_runtime_t status;
-        if (input_manager_get_sensor_status(speed_sensor_index, &status)) {
-            vehicle_speed = status.calibrated_value;  // Use actual speed if available
-        }
-    }
-    g_message_bus.publishFloat(MSG_VEHICLE_SPEED, vehicle_speed);
+    // Vehicle speed is published by the vehicle speed sensor itself
+    // No need to republish it here - just use the cached value from handle_vehicle_speed()
 }
 
 static bool is_shift_safe(void) {

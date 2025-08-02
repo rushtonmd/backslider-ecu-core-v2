@@ -105,6 +105,20 @@ bool MessageBus::publishFloat(uint32_t msg_id, float value) {
         Serial.print(value);
         Serial.println("%");
     }
+    
+    // DEBUG: Show vehicle speed messages specifically
+    if (msg_id == MSG_VEHICLE_SPEED) {
+        Serial.print("MessageBus: Published MSG_VEHICLE_SPEED = ");
+        Serial.print(value);
+        Serial.print(" KPH (data bytes: ");
+        uint8_t* bytes = (uint8_t*)&value;
+        for (int i = 0; i < 4; i++) {
+            Serial.print("0x");
+            Serial.print(bytes[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println(")");
+    }
     #else
     if (msg_id == MSG_THROTTLE_POSITION) {
         printf("MessageBus: Published MSG_THROTTLE_POSITION = %.2f%%\n", value);

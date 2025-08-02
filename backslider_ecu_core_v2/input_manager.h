@@ -63,6 +63,9 @@ void input_manager_get_interrupt_freq_stats(uint32_t* total_interrupts, uint32_t
 // Get count of active interrupt frequency counters
 uint8_t input_manager_get_interrupt_freq_counter_count(void);
 
+// Get current frequency for a sensor (by message ID)
+uint32_t input_manager_get_current_frequency(uint32_t msg_id);
+
 // =============================================================================
 // UTILITY FUNCTIONS
 // =============================================================================

@@ -77,6 +77,11 @@ void ParameterRegistry::handle_parameter_request(const CANMessage* msg) {
     #ifdef ARDUINO
     Serial.print("ParameterRegistry: handle_parameter_request called for CAN ID 0x");
     Serial.println(msg->id, HEX);
+    
+    // Special debug for vehicle speed requests
+    if (msg->id == 0x10300002) {  // MSG_VEHICLE_SPEED
+        Serial.println("DEBUG: Vehicle speed parameter request received!");
+    }
     #endif
     
     parameter_msg_t* param = get_parameter_msg(msg);
