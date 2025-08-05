@@ -101,6 +101,7 @@ inline void send_parameter_response_routed(uint32_t param_id, uint8_t operation,
     CANMessage can_response;
     can_response.id = param_id;
     can_response.len = sizeof(parameter_msg_t);
+    can_response.flags.extended = true;  // CRITICAL: Set extended flag for 29-bit CAN IDs
     memcpy(can_response.buf, &response, sizeof(parameter_msg_t));
     
     // Send to external serial if initialized

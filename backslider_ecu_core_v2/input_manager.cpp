@@ -310,9 +310,9 @@ static void update_single_sensor(uint8_t sensor_index) {
     // Debug: Check if this is the vehicle speed sensor
     #ifdef ARDUINO
     if (sensor->msg_id == MSG_VEHICLE_SPEED) {
-        Serial.print("DEBUG: update_single_sensor called for vehicle speed sensor (index: ");
-        Serial.print(sensor_index);
-        Serial.println(")");
+        // Serial.print("DEBUG: update_single_sensor called for vehicle speed sensor (index: ");
+        // Serial.print(sensor_index);
+        // Serial.println(")");
     }
     #endif
     
@@ -378,9 +378,9 @@ static void update_single_sensor(uint8_t sensor_index) {
                 // Debug: Check if this is the vehicle speed sensor
                 #ifdef ARDUINO
                 if (sensor->msg_id == MSG_VEHICLE_SPEED) {
-                    Serial.print("DEBUG: Vehicle speed sensor using interrupt-based measurement (index: ");
-                    Serial.print(sensor_index);
-                    Serial.println(")");
+                    // Serial.print("DEBUG: Vehicle speed sensor using interrupt-based measurement (index: ");
+                    // Serial.print(sensor_index);
+                    // Serial.println(")");
                 }
                 #endif
                 
@@ -388,7 +388,7 @@ static void update_single_sensor(uint8_t sensor_index) {
                 if (!should_publish_interrupt_message(sensor_index)) {
                     #ifdef ARDUINO
                     if (sensor->msg_id == MSG_VEHICLE_SPEED) {
-                        Serial.println("DEBUG: Vehicle speed sensor - should_publish_interrupt_message returned FALSE, exiting update_single_sensor");
+                        // Serial.println("DEBUG: Vehicle speed sensor - should_publish_interrupt_message returned FALSE, exiting update_single_sensor");
                     }
                     #endif
                     return;  // Not time to publish yet
@@ -396,7 +396,7 @@ static void update_single_sensor(uint8_t sensor_index) {
                 
                 #ifdef ARDUINO
                 if (sensor->msg_id == MSG_VEHICLE_SPEED) {
-                    Serial.println("DEBUG: Vehicle speed sensor - should_publish_interrupt_message returned TRUE, continuing");
+                    // Serial.println("DEBUG: Vehicle speed sensor - should_publish_interrupt_message returned TRUE, continuing");
                 }
                 #endif
                 
@@ -405,9 +405,9 @@ static void update_single_sensor(uint8_t sensor_index) {
                 // Debug: Check if this is the vehicle speed sensor
                 #ifdef ARDUINO
                 if (sensor->msg_id == MSG_VEHICLE_SPEED) {
-                    Serial.print("DEBUG: Vehicle speed sensor using polling-based measurement (index: ");
-                    Serial.print(sensor_index);
-                    Serial.println(")");
+                    // Serial.print("DEBUG: Vehicle speed sensor using polling-based measurement (index: ");
+                    // Serial.print(sensor_index);
+                    // Serial.println(")");
                 }
                 #endif
                 
@@ -418,11 +418,11 @@ static void update_single_sensor(uint8_t sensor_index) {
             
             #ifdef ARDUINO
             if (sensor->msg_id == MSG_VEHICLE_SPEED) {
-                Serial.print("DEBUG: Vehicle speed sensor - measured_freq: ");
-                Serial.print(measured_freq);
-                Serial.print(" Hz, calibrated_value: ");
-                Serial.print(calibrated_value);
-                Serial.println(" KPH");
+                // Serial.print("DEBUG: Vehicle speed sensor - measured_freq: ");
+                // Serial.print(measured_freq);
+                // Serial.print(" Hz, calibrated_value: ");
+                // Serial.print(calibrated_value);
+                // Serial.println(" KPH");
             }
             #endif
             break;
@@ -490,11 +490,11 @@ static void update_single_sensor(uint8_t sensor_index) {
     // Publish to message bus
     #ifdef ARDUINO
     if (sensor->msg_id == MSG_VEHICLE_SPEED) {
-        Serial.print("DEBUG: Vehicle speed sensor - About to publish calibrated_value: ");
-        Serial.print(calibrated_value);
-        Serial.print(" KPH to message bus with MSG_ID: 0x");
-        Serial.print(sensor->msg_id, HEX);
-        Serial.println();
+        // Serial.print("DEBUG: Vehicle speed sensor - About to publish calibrated_value: ");
+        // Serial.print(calibrated_value);
+        // Serial.print(" KPH to message bus with MSG_ID: 0x");
+        // Serial.print(sensor->msg_id, HEX);
+        // Serial.println();
     }
     #endif
     
@@ -502,7 +502,7 @@ static void update_single_sensor(uint8_t sensor_index) {
     
     #ifdef ARDUINO
     if (sensor->msg_id == MSG_VEHICLE_SPEED) {
-        Serial.println("DEBUG: Vehicle speed sensor - publish_sensor_value() completed");
+        // Serial.println("DEBUG: Vehicle speed sensor - publish_sensor_value() completed");
     }
     #endif
 }
@@ -572,11 +572,11 @@ static void publish_sensor_value(uint32_t msg_id, float value) {
         static uint32_t last_speed_publish_debug = 0;
         uint32_t now = millis();
         if (now - last_speed_publish_debug >= 1000) {  // Every 1 second
-            Serial.print("DEBUG: Publishing Vehicle Speed to Message Bus - Value: ");
-            Serial.print(value);
-            Serial.print(", MSG_ID: 0x");
-            Serial.print(msg_id, HEX);
-            Serial.println();
+            // Serial.print("DEBUG: Publishing Vehicle Speed to Message Bus - Value: ");
+            // Serial.print(value);
+            // Serial.print(", MSG_ID: 0x");
+            // Serial.print(msg_id, HEX);
+            // Serial.println();
             last_speed_publish_debug = now;
         }
     }
@@ -1104,17 +1104,17 @@ static void update_interrupt_frequency_calculations(void) {
     uint32_t now_us = micros();
     
     // TEMPORARY DEBUG: Print active frequency counter count
-    static uint32_t last_debug_time = 0;
-    if (now_us - last_debug_time >= 5000000) {  // Every 5 seconds
-        #ifdef ARDUINO
-        Serial.print("DEBUG: Active frequency counters: ");
-        Serial.print(interrupt_freq_counter_count);
-        Serial.print(", Processing ");
-        Serial.print(interrupt_freq_counter_count);
-        Serial.println(" counters");
-        #endif
-        last_debug_time = now_us;
-    }
+    // static uint32_t last_debug_time = 0;
+    // if (now_us - last_debug_time >= 5000000) {  // Every 5 seconds
+    //     #ifdef ARDUINO
+    //     Serial.print("DEBUG: Active frequency counters: ");
+    //     Serial.print(interrupt_freq_counter_count);
+    //     Serial.print(", Processing ");
+    //     Serial.print(interrupt_freq_counter_count);
+    //     Serial.println(" counters");
+    //     #endif
+    //     last_debug_time = now_us;
+    // }
     
     // Process each active interrupt frequency counter
     for (uint8_t i = 0; i < interrupt_freq_counter_count; i++) {
@@ -1137,35 +1137,35 @@ static void update_interrupt_frequency_calculations(void) {
             // TEMPORARY DEBUG: Print frequency calculation for vehicle speed sensor
             if (sensor->msg_id == MSG_VEHICLE_SPEED) {
                 #ifdef ARDUINO
-                Serial.print("DEBUG: Vehicle Speed - Pulses: ");
-                Serial.print(pulse_diff);
-                Serial.print(", Freq: ");
-                Serial.print(interrupt_freq_main[i].calculated_frequency);
-                Serial.print(" Hz, Pin: ");
-                Serial.print(interrupt_freq_main[i].pin);
+                // Serial.print("DEBUG: Vehicle Speed - Pulses: ");
+                // Serial.print(pulse_diff);
+                // Serial.print(", Freq: ");
+                // Serial.print(interrupt_freq_main[i].calculated_frequency);
+                // Serial.print(" Hz, Pin: ");
+                // Serial.print(interrupt_freq_main[i].pin);
                 
                 // Calculate what the speed should be based on the frequency (same as calibrate_frequency)
                 float base_value = (float)interrupt_freq_main[i].calculated_frequency * 60.0f / sensor->config.frequency.pulses_per_unit;
                 float calibrated_speed = base_value * sensor->config.frequency.scaling_factor;
-                Serial.print(", Calibrated Speed: ");
-                Serial.print(calibrated_speed);
-                Serial.print(" KPH");
+                // Serial.print(", Calibrated Speed: ");
+                // Serial.print(calibrated_speed);
+                // Serial.print(" KPH");
                 
                 // Show the message ID being sent
-                Serial.print(", MSG_ID: 0x");
-                Serial.print(sensor->msg_id, HEX);
-                Serial.println();
+                // Serial.print(", MSG_ID: 0x");
+                // Serial.print(sensor->msg_id, HEX);
+                // Serial.println();
                 
                 // Debug: Check if this sensor should publish
                 if (should_publish_interrupt_message(interrupt_freq_main[i].sensor_index)) {
-                    Serial.print("DEBUG: Vehicle speed sensor SHOULD publish - calibrated value: ");
-                    Serial.print(calibrated_speed);
-                    Serial.println(" KPH");
+                    // Serial.print("DEBUG: Vehicle speed sensor SHOULD publish - calibrated value: ");
+                    // Serial.print(calibrated_speed);
+                    // Serial.println(" KPH");
                     
                     // Actually publish the value to the message bus
                     publish_sensor_value(sensor->msg_id, calibrated_speed);
                 } else {
-                    Serial.println("DEBUG: Vehicle speed sensor should NOT publish yet");
+                    // Serial.println("DEBUG: Vehicle speed sensor should NOT publish yet");
                 }
                 #endif
             }
@@ -1195,11 +1195,11 @@ static bool should_publish_interrupt_message(uint8_t sensor_index) {
     // Debug: Check if this is the vehicle speed sensor
     #ifdef ARDUINO
     if (sensors[sensor_index].msg_id == MSG_VEHICLE_SPEED) {
-        Serial.print("DEBUG: should_publish_interrupt_message called for vehicle speed sensor (index: ");
-        Serial.print(sensor_index);
-        Serial.print(", interrupt_freq_counter_count: ");
-        Serial.print(interrupt_freq_counter_count);
-        Serial.println(")");
+        // Serial.print("DEBUG: should_publish_interrupt_message called for vehicle speed sensor (index: ");
+        // Serial.print(sensor_index);
+        // Serial.print(", interrupt_freq_counter_count: ");
+        // Serial.print(interrupt_freq_counter_count);
+        // Serial.println(")");
     }
     #endif
     
@@ -1218,11 +1218,11 @@ static bool should_publish_interrupt_message(uint8_t sensor_index) {
                 // Update the last message time
                 interrupt_freq_main[i].last_message_time_us = now_us;
                 #ifdef ARDUINO
-                Serial.print("DEBUG: Allowing vehicle speed publication - interval: ");
-                Serial.print(message_interval_us);
-                Serial.print(" us (");
-                Serial.print(sensor->config.frequency.message_update_rate_hz);
-                Serial.println(" Hz)");
+                // Serial.print("DEBUG: Allowing vehicle speed publication - interval: ");
+                // Serial.print(message_interval_us);
+                // Serial.print(" us (");
+                // Serial.print(sensor->config.frequency.message_update_rate_hz);
+                // Serial.println(" Hz)");
                 #endif
                 return true;
             }

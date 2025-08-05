@@ -507,23 +507,24 @@ void CustomMessageHandler::debug_print(const char* message) {
 }
 
 void CustomMessageHandler::debug_print_custom_message(const CAN_message_t& msg) {
+    // Debug: Show custom message
     #ifdef ARDUINO
-    Serial.print("Custom Message: ID=0x");
-    Serial.print(msg.id, HEX);
-    Serial.print(" LEN=");
-    Serial.print(msg.len);
-    Serial.print(" DATA=");
-    for (uint8_t i = 0; i < msg.len; i++) {
-        Serial.print(msg.buf[i], HEX);
-        Serial.print(" ");
-    }
-    Serial.println();
+    // Serial.print("Custom Message: ID=0x");
+    // Serial.print(msg.id, HEX);
+    // Serial.print(" LEN=");
+    // Serial.print(msg.len);
+    // Serial.print(" DATA=");
+    // for (int i = 0; i < msg.len && i < 8; i++) {
+    //     Serial.print(" ");
+    //     Serial.print(msg.buf[i], HEX);
+    // }
+    // Serial.println();
     #else
-    printf("Custom Message: ID=0x%03X LEN=%d DATA=", msg.id, msg.len);
-    for (uint8_t i = 0; i < msg.len; i++) {
-        printf("%02X ", msg.buf[i]);
-    }
-    printf("\n");
+    // printf("Custom Message: ID=0x%03X LEN=%d DATA=", msg.id, msg.len);
+    // for (int i = 0; i < msg.len && i < 8; i++) {
+    //     printf(" %02X", msg.buf[i]);
+    // }
+    // printf("\n");
     #endif
 }
 

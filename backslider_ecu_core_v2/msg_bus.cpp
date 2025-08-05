@@ -107,18 +107,18 @@ bool MessageBus::publishFloat(uint32_t msg_id, float value) {
     }
     
     // DEBUG: Show vehicle speed messages specifically
-    if (msg_id == MSG_VEHICLE_SPEED) {
-        Serial.print("MessageBus: Published MSG_VEHICLE_SPEED = ");
-        Serial.print(value);
-        Serial.print(" KPH (data bytes: ");
-        uint8_t* bytes = (uint8_t*)&value;
-        for (int i = 0; i < 4; i++) {
-            Serial.print("0x");
-            Serial.print(bytes[i], HEX);
-            Serial.print(" ");
-        }
-        Serial.println(")");
-    }
+    // if (msg_id == MSG_VEHICLE_SPEED) {
+    //     Serial.print("MessageBus: Published MSG_VEHICLE_SPEED = ");
+    //     Serial.print(value);
+    //     Serial.print(" KPH (data bytes: ");
+    //     uint8_t* bytes = (uint8_t*)&value;
+    //     for (int i = 0; i < 4; i++) {
+    //         Serial.print("0x");
+    //         Serial.print(bytes[i], HEX);
+    //         Serial.print(" ");
+    //     }
+    //     Serial.println(")");
+    // }
     #else
     if (msg_id == MSG_THROTTLE_POSITION) {
         printf("MessageBus: Published MSG_THROTTLE_POSITION = %.2f%%\n", value);
@@ -142,10 +142,27 @@ bool MessageBus::publishUint8(uint32_t msg_id, uint8_t value) {
 
 void MessageBus::process() {
     // Process internal message queue
+    uint16_t queue_size_before = getQueueSize();
     process_internal_queue();
+    uint16_t queue_size_after = getQueueSize();
+    
+    #ifdef ARDUINO
+    static uint32_t last_process_debug = 0;
+    uint32_t now_ms = millis();
+    if (now_ms - last_process_debug >= 5000) {  // Every 5 seconds
+        Serial.print("MessageBus: process() - queue size: ");
+        Serial.print(queue_size_before);
+        Serial.print(" -> ");
+        Serial.print(queue_size_after);
+        Serial.print(", processed: ");
+        Serial.print(queue_size_before - queue_size_after);
+        Serial.print(", total processed: ");
+        Serial.println(messages_processed);
+        last_process_debug = now_ms;
+    }
+    #endif
     
     // Update messages per second statistics
-    uint32_t now_ms = millis();
     if (now_ms - last_stats_reset_ms >= 1000) {  // Every second
         messages_per_second = messages_published;
         messages_published = 0;  // Reset counter

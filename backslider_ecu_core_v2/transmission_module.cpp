@@ -856,22 +856,22 @@ static void handle_vehicle_speed(const CANMessage* msg) {
     last_speed_update_ms = millis();
     
     #ifdef ARDUINO
-    Serial.print("DEBUG: Transmission module received vehicle speed message - CAN ID: 0x");
-    Serial.print(msg->id, HEX);
-    Serial.print(", len: ");
-    Serial.print(msg->len);
-    Serial.print(", data bytes: ");
-    for (int i = 0; i < msg->len && i < 8; i++) {
-        Serial.print("0x");
-        Serial.print(msg->buf[i], HEX);
-        Serial.print(" ");
-    }
-    Serial.print(", unpacked value: ");
-    Serial.print(unpacked_value);
-    Serial.print(" KPH, cached value: ");
-    Serial.print(cached_vehicle_speed);
-    Serial.print(" KPH, timestamp: ");
-    Serial.println(last_speed_update_ms);
+    // Serial.print("DEBUG: Transmission module received vehicle speed message - CAN ID: 0x");
+    // Serial.print(msg->id, HEX);
+    // Serial.print(", len: ");
+    // Serial.print(msg->len);
+    // Serial.print(", data bytes: ");
+    // for (int i = 0; i < msg->len && i < 8; i++) {
+    //     Serial.print("0x");
+    //     Serial.print(msg->buf[i], HEX);
+    //     Serial.print(" ");
+    // }
+    // Serial.print(", unpacked value: ");
+    // Serial.print(unpacked_value);
+    // Serial.print(" KPH, cached value: ");
+    // Serial.print(cached_vehicle_speed);
+    // Serial.print(" KPH, timestamp: ");
+    // Serial.println(last_speed_update_ms);
     #endif
 }
 
@@ -962,42 +962,42 @@ static float get_vehicle_speed_with_timeout(void) {
         float base_value = (float)current_frequency * 60.0f / 5000.0f;  // pulses_per_unit = 5000
         float current_speed = base_value * 60.0f;  // scaling_factor = 60
         
-        #ifdef ARDUINO
-        static uint32_t last_debug_time = 0;
-        if (now_ms - last_debug_time >= 1000) {  // Every second
-            Serial.print("DEBUG: Parameter request for vehicle speed - using current frequency: ");
-            Serial.print(current_frequency);
-            Serial.print(" Hz, calculated speed: ");
-            Serial.print(current_speed);
-            Serial.println(" KPH");
-            last_debug_time = now_ms;
-        }
-        #endif
+        // #ifdef ARDUINO
+        // static uint32_t last_debug_time = 0;
+        // if (now_ms - last_debug_time >= 1000) {  // Every second
+        //     Serial.print("DEBUG: Parameter request for vehicle speed - using current frequency: ");
+        //     Serial.print(current_frequency);
+        //     Serial.print(" Hz, calculated speed: ");
+        //     Serial.print(current_speed);
+        //     Serial.println(" KPH");
+        //     last_debug_time = now_ms;
+        // }
+        // #endif
         
         return current_speed;
     }
     
     // Fallback to cached value if frequency is 0 (vehicle stopped)
     if (now_ms - last_speed_update_ms < EXTERNAL_DATA_TIMEOUT_MS) {
-        #ifdef ARDUINO
-        static uint32_t last_debug_time = 0;
-        if (now_ms - last_debug_time >= 1000) {  // Every second
-            Serial.print("DEBUG: Parameter request for vehicle speed - returning cached value: ");
-            Serial.print(cached_vehicle_speed);
-            Serial.print(" KPH (last update: ");
-            Serial.print(now_ms - last_speed_update_ms);
-            Serial.println(" ms ago)");
-            last_debug_time = now_ms;
-        }
-        #endif
+        // #ifdef ARDUINO
+        // static uint32_t last_debug_time = 0;
+        // if (now_ms - last_debug_time >= 1000) {  // Every second
+        //     Serial.print("DEBUG: Parameter request for vehicle speed - returning cached value: ");
+        //     Serial.print(cached_vehicle_speed);
+        //     Serial.print(" KPH (last update: ");
+        //     Serial.print(now_ms - last_speed_update_ms);
+        //     Serial.println(" ms ago)");
+        //     last_debug_time = now_ms;
+        // }
+        // #endif
         return cached_vehicle_speed;
     } else {
         // Return safe default if data is stale
-        #ifdef ARDUINO
-        Serial.print("DEBUG: Parameter request for vehicle speed - data stale, returning default: 35.0 KPH (last update: ");
-        Serial.print(now_ms - last_speed_update_ms);
-        Serial.println(" ms ago)");
-        #endif
+        // #ifdef ARDUINO
+        // Serial.print("DEBUG: Parameter request for vehicle speed - data stale, returning default: 35.0 KPH (last update: ");
+        // Serial.print(now_ms - last_speed_update_ms);
+        // Serial.println(" ms ago)");
+        // #endif
         return 35.0f;  // Safe moderate speed default
     }
 }

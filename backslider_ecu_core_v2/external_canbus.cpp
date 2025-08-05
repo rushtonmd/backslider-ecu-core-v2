@@ -355,26 +355,42 @@ void ExternalCanBus::route_incoming_message(const CAN_message_t& msg) {
     static uint32_t last_can_debug_time = 0;
     uint32_t now = millis();
     if (now - last_can_debug_time >= 500) {  // Every 500ms to avoid flooding
+        // Debug: Show raw CAN message
         #ifdef ARDUINO
-        Serial.print("CAN RAW: ID=0x");
-        Serial.print(msg.id, HEX);
-        Serial.print(" len=");
-        Serial.print(msg.len);
-        Serial.print(" data=");
-        for (int i = 0; i < msg.len; i++) {
-            Serial.print(" ");
-            Serial.print(msg.buf[i], HEX);
-        }
-        Serial.println();
+        // Serial.print("CAN RAW: ID=0x");
+        // Serial.print(msg.id, HEX);
+        // Serial.print(" len=");
+        // Serial.print(msg.len);
+        // Serial.print(" data=");
+        // for (int i = 0; i < msg.len && i < 8; i++) {
+        //     Serial.print(" ");
+        //     Serial.print(msg.buf[i], HEX);
+        // }
+        // Serial.println();
         #else
-        printf("CAN RAW: ID=0x%08X len=%d data:", msg.id, msg.len);
-        for (int i = 0; i < msg.len; i++) {
-            printf(" %02X", msg.buf[i]);
-        }
-        printf("\n");
+        // printf("CAN RAW: ID=0x%08X len=%d data:", msg.id, msg.len);
+        // for (int i = 0; i < msg.len && i < 8; i++) {
+        //     printf(" %02X", msg.buf[i]);
+        // }
+        // printf("\n");
         #endif
         last_can_debug_time = now;
     }
+    
+    #ifdef ARDUINO
+    Serial.print("ExternalCanBus: route_incoming_message - CAN ID 0x");
+    Serial.print(msg.id, HEX);
+    Serial.print(", len=");
+    Serial.print(msg.len);
+    Serial.print(", extended=");
+    Serial.print(msg.flags.extended ? "YES" : "NO");
+    Serial.print(", is_obdii=");
+    Serial.print(is_obdii_message(msg) ? "YES" : "NO");
+    Serial.print(", is_custom=");
+    Serial.print(is_custom_message(msg) ? "YES" : "NO");
+    Serial.print(", is_parameter=");
+    Serial.println(is_parameter_message(msg) ? "YES" : "NO");
+    #endif
     
     // Check if it's an OBD-II request
     if (obdii_enabled && is_obdii_message(msg)) {
@@ -385,7 +401,14 @@ void ExternalCanBus::route_incoming_message(const CAN_message_t& msg) {
         return;
     }
     
-    // Check if it's a custom message FIRST (before parameter messages)
+    // Check if it's a parameter message FIRST (before custom messages)
+    if (is_parameter_message(msg)) {
+        route_parameter_message(msg);
+        stats.parameter_messages++;
+        return;
+    }
+    
+    // Check if it's a custom message (after parameter messages)
     if (custom_messages_enabled && is_custom_message(msg)) {
         // CRITICAL FIX: Check if CustomCanBusManager has a mapping for this CAN ID
         // If so, let it handle the message instead of CustomMessageHandler
@@ -397,10 +420,10 @@ void ExternalCanBus::route_incoming_message(const CAN_message_t& msg) {
         static uint32_t last_debug_time = 0;
         uint32_t now = millis();
         if (now - last_debug_time >= 1000) {  // Every 1 second
-            Serial.print("DEBUG: CAN ID 0x");
-            Serial.print(msg.id, HEX);
-            Serial.print(" has mapping: ");
-            Serial.println(has_mapping ? "YES" : "NO");
+            // Serial.print("DEBUG: CAN ID 0x");
+            // Serial.print(msg.id, HEX);
+            // Serial.print(" has mapping: ");
+            // Serial.println(has_mapping ? "YES" : "NO");
             last_debug_time = now;
         }
         #endif
@@ -417,13 +440,6 @@ void ExternalCanBus::route_incoming_message(const CAN_message_t& msg) {
             custom_handler->process_message(msg);
             stats.custom_messages++;
         }
-        return;
-    }
-    
-    // Check if it's a parameter message - route to internal message bus
-    if (is_parameter_message(msg)) {
-        route_parameter_message(msg);
-        stats.parameter_messages++;
         return;
     }
     
@@ -451,6 +467,15 @@ void ExternalCanBus::route_parameter_message(const CAN_message_t& msg) {
     // This allows modules to handle parameter requests directly
     extern MessageBus g_message_bus;
     
+    #ifdef ARDUINO
+    Serial.print("ExternalCanBus: route_parameter_message called for CAN ID 0x");
+    Serial.print(msg.id, HEX);
+    Serial.print(", len=");
+    Serial.print(msg.len);
+    Serial.print(", extended=");
+    Serial.println(msg.flags.extended ? "YES" : "NO");
+    #endif
+    
     // Create a CANMessage for the internal message bus
     CANMessage internal_msg;
     internal_msg.id = msg.id;
@@ -460,6 +485,17 @@ void ExternalCanBus::route_parameter_message(const CAN_message_t& msg) {
     // Check if this is a parameter request and add routing metadata
     if (msg.len == sizeof(parameter_msg_t)) {
         parameter_msg_t* param = (parameter_msg_t*)internal_msg.buf;
+        
+        #ifdef ARDUINO
+        Serial.print("ExternalCanBus: Parameter message - operation=");
+        Serial.print(param->operation);
+        Serial.print(", value=");
+        Serial.print(param->value);
+        Serial.print(", channel=");
+        Serial.print(param->source_channel);
+        Serial.print(", request_id=");
+        Serial.println(param->request_id);
+        #endif
         
         // Only add routing for read/write requests (not responses)
         if (param->operation == PARAM_OP_READ_REQUEST || 
@@ -471,11 +507,20 @@ void ExternalCanBus::route_parameter_message(const CAN_message_t& msg) {
             
             // Track this request
             request_tracker.add_request(CHANNEL_CAN_BUS, msg.id);
+            
+            #ifdef ARDUINO
+            Serial.println("ExternalCanBus: Added routing metadata to parameter request");
+            #endif
         }
     }
     
     // Publish to internal message bus
-    g_message_bus.publish(msg.id, internal_msg.buf, internal_msg.len);
+    bool publish_success = g_message_bus.publish(msg.id, internal_msg.buf, internal_msg.len);
+    
+    #ifdef ARDUINO
+    Serial.print("ExternalCanBus: Parameter message publish result: ");
+    Serial.println(publish_success ? "SUCCESS" : "FAILED");
+    #endif
     
     debug_print("ExternalCanBus: Parameter message routed to internal message bus");
 }
@@ -851,6 +896,7 @@ void ExternalCanBus::on_message_bus_message(const CANMessage* msg) {
                 CAN_message_t can_msg;
                 can_msg.id = external_response.id;
                 can_msg.len = external_response.len;
+                can_msg.flags.extended = external_response.flags.extended;  // CRITICAL: Copy extended flag
                 memcpy(can_msg.buf, external_response.buf, external_response.len);
                 send_can_message(can_msg);
                 
@@ -866,6 +912,7 @@ void ExternalCanBus::on_message_bus_message(const CANMessage* msg) {
     CAN_message_t can_msg;
     can_msg.id = msg->id;
     can_msg.len = msg->len;
+    can_msg.flags.extended = msg->flags.extended;  // CRITICAL: Copy extended flag
     memcpy(can_msg.buf, msg->buf, msg->len);
     send_can_message(can_msg);
 }

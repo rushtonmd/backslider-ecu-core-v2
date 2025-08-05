@@ -338,12 +338,11 @@ void CustomCanBusManager::handle_can_message(uint32_t can_id, const uint8_t* dat
     if (mapping_index < 0) {
         stats.unknown_messages++;
         #ifdef ARDUINO
-        // DEBUG: Show unmapped CAN messages
-        Serial.print("CustomCanBusManager: No mapping for CAN 0x");
-        Serial.print(can_id, HEX);
-        Serial.println(" (unknown message)");
+        // Serial.print("CustomCanBusManager: No mapping for CAN 0x");
+        // Serial.print(can_id, HEX);
+        // Serial.println(" (unknown message)");
         #else
-        printf("CustomCanBusManager: No mapping for CAN 0x%08X (unknown message)\n", can_id);
+        // printf("CustomCanBusManager: No mapping for CAN 0x%08X (unknown message)\n", can_id);
         #endif
         return;
     }

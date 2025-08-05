@@ -345,15 +345,15 @@ void MainApplication::init() {
 void MainApplication::run() {
     uint32_t loop_start_us = micros();
     
-    #ifdef ARDUINO
-    static uint32_t last_run_debug = 0;
-    uint32_t run_now = millis();
-    if (run_now - last_run_debug >= 5000) {  // Every 5 seconds
-        Serial.print("MainApplication: Main loop running - loops/sec: ");
-        Serial.println(loops_per_second);
-        last_run_debug = run_now;
-    }
-    #endif
+    // #ifdef ARDUINO
+    // static uint32_t last_run_debug = 0;
+    // uint32_t run_now = millis();
+    // if (run_now - last_run_debug >= 5000) {  // Every 5 seconds
+    //     Serial.print("MainApplication: Main loop running - loops/sec: ");
+    //     Serial.println(loops_per_second);
+    //     last_run_debug = run_now;
+    // }
+    // #endif
     
     // Update all sensors (each sensor manages its own timing)
     input_manager_update();
@@ -363,12 +363,12 @@ void MainApplication::run() {
     static uint32_t last_process_debug = 0;
     uint32_t now = millis();
     if (now - last_process_debug >= 2000) {  // Every 2 seconds
-        Serial.print("MainApplication: Processing message bus - queue size: ");
-        Serial.print(g_message_bus.getQueueSize());
-        Serial.print(", messages/sec: ");
-        Serial.print(g_message_bus.getMessagesPerSecond());
-        Serial.print(", total published: ");
-        Serial.println(g_message_bus.getMessagesPublished());
+        // Serial.print("MainApplication: Processing message bus - queue size: ");
+        // Serial.print(g_message_bus.getQueueSize());
+        // Serial.print(", messages/sec: ");
+        // Serial.print(g_message_bus.getMessagesPerSecond());
+        // Serial.print(", total published: ");
+        // Serial.println(g_message_bus.getMessagesPublished());
         last_process_debug = now;
     }
     #endif

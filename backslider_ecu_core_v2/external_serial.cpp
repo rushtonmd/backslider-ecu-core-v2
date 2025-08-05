@@ -674,7 +674,7 @@ void ExternalSerial::update() {
     static uint32_t last_update_debug = 0;
     uint32_t update_now = millis();
     if (update_now - last_update_debug >= 5000) {  // Every 5 seconds
-        Serial.println("!!! ExternalSerial::update() called");
+        // Serial.println("!!! ExternalSerial::update() called");
         Serial.flush();
         last_update_debug = update_now;
     }
