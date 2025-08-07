@@ -1,7 +1,8 @@
 /*
- * SimpleNextion.cpp - Lightweight Nextion Display Library Implementation
+ * SimpleNextion.cpp - Lightweight Nextion Display Library Implementation with Command Queue
  * 
  * Simple write-only communication with Nextion displays
+ * Includes built-in command throttling to prevent overwhelming the display
  */
 
 #include "SimpleNextion.h"
@@ -9,6 +10,7 @@
 SimpleNextion::SimpleNextion(HardwareSerial* serialPort) {
     serial = serialPort;
     initialized = false;
+    last_command_time = 0;
 }
 
 bool SimpleNextion::begin(long baudRate, int rxPin, int txPin) {
@@ -23,15 +25,16 @@ bool SimpleNextion::begin(long baudRate, int rxPin, int txPin) {
     
     delay(100); // Give time for serial to initialize
     
-    // Send a simple command to test communication
-    sendCommand("bkcmd=0"); // Disable return data for write-only mode
+    // Send initial commands immediately (bypassing queue for setup)
+    sendCommandImmediate("bkcmd=0"); // Disable return data for write-only mode
     delay(100);
     
     // Try to wake the display in case it's sleeping
-    wake();
+    sendCommandImmediate("sleep=0");
     delay(100);
     
     initialized = true;
+    last_command_time = millis();
     
     Serial.printf("Nextion: Initialized on baud %ld", baudRate);
     if (rxPin >= 0 && txPin >= 0) {
@@ -42,13 +45,39 @@ bool SimpleNextion::begin(long baudRate, int rxPin, int txPin) {
     return true;
 }
 
+void SimpleNextion::update() {
+    if (!initialized || command_queue.empty()) return;
+    
+    unsigned long current_time = millis();
+    if (current_time - last_command_time >= COMMAND_INTERVAL) {
+        // Get the next command
+        NextionCommand cmd = command_queue.front();
+        command_queue.pop();
+        
+        // Send the command immediately
+        sendCommandImmediate(cmd.command.c_str());
+        last_command_time = current_time;
+        
+        // Debug: Warn if queue is getting large
+        if (command_queue.size() > 20) {
+            Serial.printf("⚠️ Nextion queue large: %d commands\n", command_queue.size());
+        }
+    }
+}
+
+void SimpleNextion::setThrottleInterval(unsigned long interval_ms) {
+    // Allow changing the throttle interval if needed
+    // Note: This changes a const, so we need to cast away const-ness
+    const_cast<unsigned long&>(COMMAND_INTERVAL) = interval_ms;
+}
+
 void SimpleNextion::endCommand() {
     serial->write(0xFF);
     serial->write(0xFF);
     serial->write(0xFF);
 }
 
-void SimpleNextion::sendCommand(const char* command) {
+void SimpleNextion::sendCommandImmediate(const char* command) {
     if (!initialized) return;
     
     serial->print(command);
@@ -56,6 +85,26 @@ void SimpleNextion::sendCommand(const char* command) {
     
     // Small delay to prevent overwhelming the display
     delayMicroseconds(100);
+}
+
+void SimpleNextion::sendCommand(const char* command) {
+    if (!initialized) return;
+    
+    NextionCommand cmd;
+    cmd.command = String(command);
+    cmd.timestamp = millis();
+    
+    command_queue.push(cmd);
+}
+
+void SimpleNextion::sendCommand(const String& command) {
+    sendCommand(command.c_str());
+}
+
+void SimpleNextion::sendImmediate(const char* command) {
+    // Emergency bypass of queue - use sparingly
+    sendCommandImmediate(command);
+    last_command_time = millis();
 }
 
 // Basic display control
@@ -78,7 +127,7 @@ void SimpleNextion::wake() {
 
 void SimpleNextion::reset() {
     sendCommand("rest");
-    delay(500); // Give time for reset
+    // Note: reset will clear the queue, so we might want to handle this specially
 }
 
 // Text object functions
@@ -169,7 +218,14 @@ void SimpleNextion::setVisible(const char* objectName, bool visible) {
 
 // Utility functions
 void SimpleNextion::flush() {
-    if (initialized) {
-        serial->flush();
+    if (!initialized) return;
+    
+    // Process all queued commands immediately (with throttling)
+    while (!command_queue.empty()) {
+        update();
+        delay(COMMAND_INTERVAL); // Respect throttling even during flush
     }
+    
+    // Then flush the serial buffer
+    serial->flush();
 }

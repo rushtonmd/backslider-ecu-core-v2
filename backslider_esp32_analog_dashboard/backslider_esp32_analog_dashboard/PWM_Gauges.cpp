@@ -278,10 +278,12 @@ void PWM_SetAllGauges(float value) {
 void PWM_TestAllGauges() {
     Serial.println("PWM: Testing all gauges...");
     for (int i = 0; i < num_gauges; i++) {
-        if (gauges[i].enabled) {
-            PWM_SweepGauge(i);
-            delay(500);
-        }
+
+        // DISABLE SWEEPING FOR NOW
+        // if (gauges[i].enabled) {
+        //     PWM_SweepGauge(i);
+        //     delay(500);
+        // }
     }
     Serial.println("PWM: All gauge tests complete");
 }

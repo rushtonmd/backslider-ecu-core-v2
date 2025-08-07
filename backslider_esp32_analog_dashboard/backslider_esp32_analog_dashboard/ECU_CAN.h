@@ -29,7 +29,7 @@ struct ECUParameter {
     bool has_data;
 };
 
-// ECU Parameter IDs
+// ECU Parameter IDs - Custom ECU (Extended IDs)
 #define PARAM_FLUID_TEMP     0x10500001
 #define PARAM_CURRENT_GEAR   0x10500101
 #define PARAM_DRIVE_GEAR     0x10500104
@@ -39,6 +39,15 @@ struct ECUParameter {
 #define PARAM_OVERRUN_SOL    0x10500112
 #define PARAM_PRESSURE_SOL   0x10500113
 #define PARAM_LOCKUP_SOL     0x10500114
+
+// Haltech CAN IDs (Standard 11-bit IDs)
+#define HALTECH_ENGINE_DATA_1    0x360  // RPM, MAP, TPS, Coolant Pressure
+#define HALTECH_ENGINE_DATA_2    0x361  // Fuel, Oil, Engine Demand, Wastegate pressures  
+#define HALTECH_TEMPERATURE_DATA 0x3E0  // Coolant, Air, Fuel, Oil temperatures
+
+// Virtual Parameter IDs for Haltech data (for internal tracking)
+#define PARAM_COOLANT_TEMP   0x999001  // From Haltech 0x3E0
+#define PARAM_OIL_PRESSURE   0x999002  // From Haltech 0x361
 
 // Statistics Structure
 struct CANStats {
@@ -71,8 +80,20 @@ float CAN_GetOverrunSolenoid();
 float CAN_GetPressureSolenoid();
 float CAN_GetLockupSolenoid();
 
+// Haltech Parameter Functions
+float CAN_GetCoolantTemperature();  // Coolant temp in Celsius
+float CAN_GetOilPressure();         // Oil pressure in kPa (gauge)
+
+// Haltech Data Freshness Functions
+bool CAN_IsHaltechTempFresh(unsigned long max_age_seconds);
+bool CAN_IsHaltechPressureFresh(unsigned long max_age_seconds);
+
 // Status Functions
 bool CAN_IsInitialized();
 CANStats CAN_GetStats();
+
+// Add this to the Public Functions section in ECU_CAN.h
+void CAN_PrintDetailedDebug();
+
 
 #endif // ECU_CAN_H

@@ -1,8 +1,9 @@
 /*
- * SimpleNextion.h - Lightweight Nextion Display Library
+ * SimpleNextion.h - Lightweight Nextion Display Library with Command Queue
  * 
  * Simple write-only communication with Nextion displays
  * Uses minimal memory and provides essential functions only
+ * Includes built-in command throttling to prevent overwhelming the display
  * 
  * Protocol: All commands end with 0xFF 0xFF 0xFF
  */
@@ -12,17 +13,28 @@
 
 #include <Arduino.h>
 #include <HardwareSerial.h>
+#include <queue>
+
+struct NextionCommand {
+    String command;
+    unsigned long timestamp;
+};
 
 class SimpleNextion {
 private:
     HardwareSerial* serial;
     bool initialized;
     
+    // Command queue for throttling
+    std::queue<NextionCommand> command_queue;
+    unsigned long last_command_time;
+    static const unsigned long COMMAND_INTERVAL = 10; // 50ms between commands
+    
     // Send the 3-byte command terminator
     void endCommand();
     
-    // Send a raw command string
-    void sendCommand(const char* command);
+    // Send a raw command string immediately (internal use)
+    void sendCommandImmediate(const char* command);
     
 public:
     // Constructor - pass any HardwareSerial instance
@@ -30,6 +42,20 @@ public:
     
     // Initialize the display communication
     bool begin(long baudRate = 9600, int rxPin = -1, int txPin = -1);
+    
+    // Process the command queue - MUST be called regularly from loop()
+    void update();
+    
+    // Queue a command for throttled sending
+    void sendCommand(const char* command);
+    void sendCommand(const String& command);
+    
+    // Get queue status
+    size_t getQueueSize() const { return command_queue.size(); }
+    bool isQueueEmpty() const { return command_queue.empty(); }
+    
+    // Set throttling interval (default 50ms)
+    void setThrottleInterval(unsigned long interval_ms);
     
     // Basic display control
     void setBrightness(int brightness);  // 0-100
@@ -69,7 +95,10 @@ public:
     
     // Utility functions
     bool isInitialized() const { return initialized; }
-    void flush();  // Ensure all data is sent
+    void flush();  // Ensure all queued commands are sent
+    
+    // Emergency: Send command immediately, bypassing queue (use sparingly)
+    void sendImmediate(const char* command);
     
     // Common Nextion colors (RGB565 format)
     static const int COLOR_BLACK   = 0x0000;
