@@ -433,7 +433,7 @@ void updateGearDisplay(unsigned long backup_interval_ms) {
                                 display.setText(NEXTION_GEAR_TEXT, "D");
                             }
                             display.setVisible(NEXTION_DRIVE_TEXT, true);
-                            display.setText(NEXTION_DRIVE_TEXT, "DRIVE");
+                            display.setText(NEXTION_DRIVE_TEXT, "D");
                             display.setForegroundColor(NEXTION_GEAR_TEXT, SimpleNextion::COLOR_GREEN);
                             display.setForegroundColor(NEXTION_DRIVE_TEXT, SimpleNextion::COLOR_GREEN);
                         } else {
@@ -510,11 +510,11 @@ void updateLinePressureDisplay(unsigned long update_interval_ms) {
         // Determine color
         int current_color;
         if (current_pressure_percent > 80) {
-            current_color = SimpleNextion::COLOR_RED;
-        } else if (current_pressure_percent > 50) {
-            current_color = SimpleNextion::COLOR_YELLOW;
-        } else {
             current_color = SimpleNextion::COLOR_GREEN;
+        } else if (current_pressure_percent > 0) {
+            current_color = SimpleNextion::COLOR_GREEN;
+        } else {
+            current_color = SimpleNextion::COLOR_GRAY;
         }
         
         // Check if update needed
