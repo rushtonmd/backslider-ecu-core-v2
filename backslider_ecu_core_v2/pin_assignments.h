@@ -75,12 +75,12 @@
 
 // Automatic transmission gear selector inputs
 // These read the transmission gear selector switch positions
-#define PIN_TRANS_PARK         3    // Park position switch (ground trigger)
-#define PIN_TRANS_REVERSE      4    // Reverse position switch (ground trigger)
-#define PIN_TRANS_NEUTRAL      5    // Neutral position switch (ground trigger)
-#define PIN_TRANS_DRIVE        6    // Drive position switch (ground trigger)
-#define PIN_TRANS_SECOND       24    // Second gear position switch (ground trigger)
-#define PIN_TRANS_FIRST        25    // First gear position switch (ground trigger)
+#define PIN_TRANS_PARK         5//3    // Park position switch (ground trigger)
+#define PIN_TRANS_REVERSE      3//4    // Reverse position switch (ground trigger)
+#define PIN_TRANS_NEUTRAL      24//5    // Neutral position switch (ground trigger)
+#define PIN_TRANS_DRIVE        6//6    // Drive position switch (ground trigger)
+#define PIN_TRANS_SECOND       4//24    // Second gear position switch (ground trigger)
+#define PIN_TRANS_FIRST        25//25    // First gear position switch (ground trigger)
 
 // Note: Removed PIN_TRANS_SPORT and PIN_TRANS_MANUAL to make room for
 // PIN_TRANS_SECOND and PIN_TRANS_FIRST for proper 6-position gear selector
@@ -114,13 +114,13 @@
 // =============================================================================
 
 // Transmission solenoid outputs
-#define PIN_TRANS_SHIFT_SOL_A  20    // Shift Solenoid A (Digital Output)
-#define PIN_TRANS_SHIFT_SOL_B  21    // Shift Solenoid B (Digital Output)
-#define PIN_TRANS_OVERRUN_SOL  19    // Overrun Solenoid (PWM)
+#define PIN_TRANS_SHIFT_SOL_A  21//20    // Shift Solenoid A (Digital Output)
+#define PIN_TRANS_SHIFT_SOL_B  22//21    // Shift Solenoid B (Digital Output)
+#define PIN_TRANS_OVERRUN_SOL  18//19    // Overrun Solenoid (PWM)
 
 // Transmission pressure control
-#define PIN_TRANS_PRESSURE_SOL 22    // Line Pressure Solenoid (PWM)
-#define PIN_TRANS_LOCKUP_SOL   18    // Lockup Solenoid (PWM)
+#define PIN_TRANS_PRESSURE_SOL 19//22    // Line Pressure Solenoid (PWM)
+#define PIN_TRANS_LOCKUP_SOL   20//18    // Lockup Solenoid (PWM)
 
 // =============================================================================
 // AUXILIARY CONTROL OUTPUTS
