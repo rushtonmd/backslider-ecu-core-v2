@@ -16,8 +16,8 @@
 SimpleNextion display(&Serial2);
 
 // Nextion configuration - CHANGE THESE PINS AS NEEDED
-#define NEXTION_RX_PIN 4   // ESP32 RX (connect to Nextion TX)
-#define NEXTION_TX_PIN 5   // ESP32 TX (connect to Nextion RX)
+#define NEXTION_RX_PIN 10   // ESP32 RX (connect to Nextion TX)
+#define NEXTION_TX_PIN 12   // ESP32 TX (connect to Nextion RX)
 #define NEXTION_BAUD 115200  // Standard Nextion baud rate
 
 // Update Rate Constants (in milliseconds)
@@ -68,8 +68,8 @@ SimpleNextion display(&Serial2);
 
 // PWM Gauge configuration - CHANGE THESE PINS AS NEEDED
 #define SPEED_GAUGE_PIN GPIO_NUM_6    // PWM output for speed gauge
-#define TEMP_GAUGE_PIN GPIO_NUM_9     // PWM output for coolant temperature gauge  
-#define OIL_GAUGE_PIN GPIO_NUM_10     // PWM output for oil pressure gauge
+#define TEMP_GAUGE_PIN GPIO_NUM_5     // PWM output for coolant temperature gauge  
+#define OIL_GAUGE_PIN GPIO_NUM_4     // PWM output for oil pressure gauge
 
 // Loop performance monitoring
 unsigned long loop_counter = 0;
