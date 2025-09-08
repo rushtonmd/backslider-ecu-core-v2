@@ -1,7 +1,9 @@
 /*
- * PWM_Gauges.cpp - PWM Gauge Control Implementation
+ * PWM_Gauges.cpp - Dual-Mode Gauge Control Implementation
  * 
- * Controls analog gauges using PWM signals via 2N2222 transistors
+ * Supports both:
+ * - LEDC frequency mode (for VSS/speedometers): 14-bit, variable frequency
+ * - analogWrite voltage mode (for temp/pressure): 8-bit, 0-255 range
  */
 
 #include "PWM_Gauges.h"
@@ -21,23 +23,22 @@ bool PWM_Initialize() {
     // Initialize all gauge channels
     for (int i = 0; i < MAX_GAUGE_CHANNELS; i++) {
         gauges[i].gpio_pin = -1;
-        gauges[i].pwm_channel = -1;
         gauges[i].enabled = false;
+        gauges[i].is_frequency_mode = false;
         gauges[i].name = nullptr;
     }
     
     num_gauges = 0;
     pwm_initialized = true;
     
-    Serial.println("PWM: ✅ Gauge system initialized");
-    Serial.printf("PWM: Frequency=%dHz, Resolution=%d-bit, Max=%d\n", 
-                  PWM_FREQUENCY, PWM_RESOLUTION, PWM_MAX_VALUE);
+    Serial.println("PWM: ✅ Dual-Mode Gauge System initialized");
+    Serial.println("PWM: Supports both LEDC frequency and analogWrite voltage modes");
     
     return true;
 }
 
-int PWM_AddGauge(int gpio_pin, const char* name, float min_input, float max_input, 
-                 int min_pwm, int max_pwm) {
+int PWM_AddGauge(int gpio_pin, const char* name, int mode, float min_input, float max_input, 
+                 int min_range, int max_range) {
     if (!pwm_initialized || num_gauges >= MAX_GAUGE_CHANNELS) {
         Serial.printf("PWM: ❌ Cannot add gauge %s - system full or not initialized\n", name);
         return -1;
@@ -46,50 +47,58 @@ int PWM_AddGauge(int gpio_pin, const char* name, float min_input, float max_inpu
     int channel = num_gauges;
     GaugeChannel* gauge = &gauges[channel];
     
-    // Configure gauge
+    // Configure gauge channel
     gauge->gpio_pin = gpio_pin;
-    gauge->pwm_channel = channel;  // Use channel number as PWM channel
     gauge->enabled = true;
+    gauge->is_frequency_mode = (mode == GAUGE_MODE_FREQUENCY);
     gauge->name = name;
     
     // Calibration
     gauge->min_input = min_input;
     gauge->max_input = max_input;
-    gauge->min_pwm = min_pwm;
-    gauge->max_pwm = max_pwm;
+    gauge->min_freq = min_range;
+    gauge->max_freq = max_range;
+    gauge->min_pwm = min_range;  // Legacy compatibility
+    gauge->max_pwm = max_range;  // Legacy compatibility
     
     // State
     gauge->current_value = min_input;
-    gauge->current_pwm = min_pwm;
+    gauge->current_freq = min_range;
+    gauge->current_pwm = min_range;
     gauge->last_update = millis();
     
     // Smoothing (disabled by default)
     gauge->smooth_enabled = false;
     gauge->smooth_factor = 0.9;
     
-    // Configure ESP32 PWM - Updated for Arduino Core 3.x
-    if (!ledcAttach(gauge->gpio_pin, PWM_FREQUENCY, PWM_RESOLUTION)) {
-        Serial.printf("PWM: ❌ Failed to attach PWM to GPIO%d\n", gauge->gpio_pin);
-        return -1;
+    // Configure output based on mode
+    if (gauge->is_frequency_mode) {
+        // Frequency mode - use LEDC
+        if (min_range > 0) {
+            ledcAttach(gpio_pin, min_range, PWM_RESOLUTION);
+            ledcWrite(gpio_pin, PWM_DUTY_CYCLE);  // 50% duty cycle
+        } else {
+            pinMode(gpio_pin, OUTPUT);
+            digitalWrite(gpio_pin, LOW);
+        }
+        Serial.printf("PWM: ✅ Added FREQUENCY gauge '%s' on GPIO%d (LEDC)\n", name, gpio_pin);
+        Serial.printf("     Input: %.1f-%.1f, Freq: %d-%d Hz\n", 
+                      min_input, max_input, min_range, max_range);
+    } else {
+        // Voltage mode - use analogWrite
+        analogWrite(gpio_pin, min_range);
+        Serial.printf("PWM: ✅ Added VOLTAGE gauge '%s' on GPIO%d (analogWrite)\n", name, gpio_pin);
+        Serial.printf("     Input: %.1f-%.1f, Voltage: %d-%d (0-255)\n", 
+                      min_input, max_input, min_range, max_range);
     }
     
-    // Set initial PWM value
-    ledcWrite(gauge->gpio_pin, min_pwm);
-    
     num_gauges++;
-    
-    Serial.printf("PWM: ✅ Added gauge '%s' on GPIO%d (channel %d)\n", 
-                  name, gpio_pin, channel);
-    Serial.printf("     Input: %.1f-%.1f, PWM: %d-%d\n", 
-                  min_input, max_input, min_pwm, max_pwm);
-    
     return channel;
 }
 
 void PWM_Update() {
-    // This function can be called regularly to handle smooth transitions
-    // Currently, smoothing is handled in PWM_SetGaugeValueSmooth()
-    // Future: Could add automatic decay, diagnostics, etc.
+    // This function can be called regularly for future features
+    // Currently not needed as both LEDC and analogWrite handle everything
 }
 
 void PWM_SetGaugeValue(int channel, float value) {
@@ -102,20 +111,35 @@ void PWM_SetGaugeValue(int channel, float value) {
     // Constrain input value
     value = constrain_float(value, gauge->min_input, gauge->max_input);
     
-    // Map to PWM range
-    int pwm_value = mapValue(value, gauge->min_input, gauge->max_input, 
-                            gauge->min_pwm, gauge->max_pwm);
+    // Map to output range
+    int output_value = mapValue(value, gauge->min_input, gauge->max_input, 
+                               gauge->min_freq, gauge->max_freq);
     
-    // Update gauge
+    // Update gauge state
     gauge->current_value = value;
-    gauge->current_pwm = pwm_value;
+    gauge->current_freq = output_value;
+    gauge->current_pwm = output_value;
     gauge->last_update = millis();
     
-    // Output PWM - Updated for Arduino Core 3.x
-    ledcWrite(gauge->gpio_pin, pwm_value);
-    
-    // Debug output (uncomment for detailed logging)
-    // Serial.printf("PWM: %s = %.1f -> PWM %d\n", gauge->name, value, pwm_value);
+    // Output based on mode
+    if (gauge->is_frequency_mode) {
+        // Frequency mode - use LEDC
+        if (output_value > 0) {
+            ledcDetach(gauge->gpio_pin);
+            ledcAttach(gauge->gpio_pin, output_value, PWM_RESOLUTION);
+            ledcWrite(gauge->gpio_pin, PWM_DUTY_CYCLE);  // 50% duty cycle
+        } else {
+            ledcDetach(gauge->gpio_pin);
+            pinMode(gauge->gpio_pin, OUTPUT);
+            digitalWrite(gauge->gpio_pin, LOW);
+        }
+        Serial.printf("PWM: %s = %.1f -> %d Hz\n", gauge->name, value, output_value);
+    } else {
+        // Voltage mode - use analogWrite
+        analogWrite(gauge->gpio_pin, output_value);
+        Serial.printf("PWM: %s = %.1f -> %d/255 (%.1fV)\n", 
+                      gauge->name, value, output_value, (output_value * 3.3f / 255.0f));
+    }
 }
 
 void PWM_SetGaugeValueSmooth(int channel, float value) {
@@ -136,17 +160,20 @@ void PWM_SetGaugeValueSmooth(int channel, float value) {
     }
 }
 
-void PWM_CalibrateGauge(int channel, float min_input, float max_input, int min_pwm, int max_pwm) {
+void PWM_CalibrateGauge(int channel, float min_input, float max_input, int min_range, int max_range) {
     if (channel < 0 || channel >= num_gauges) return;
     
     GaugeChannel* gauge = &gauges[channel];
     gauge->min_input = min_input;
     gauge->max_input = max_input;
-    gauge->min_pwm = min_pwm;
-    gauge->max_pwm = max_pwm;
+    gauge->min_freq = min_range;
+    gauge->max_freq = max_range;
+    gauge->min_pwm = min_range;      // Legacy compatibility
+    gauge->max_pwm = max_range;      // Legacy compatibility
     
-    Serial.printf("PWM: Calibrated %s - Input: %.1f-%.1f, PWM: %d-%d\n", 
-                  gauge->name, min_input, max_input, min_pwm, max_pwm);
+    const char* mode_str = gauge->is_frequency_mode ? "Hz" : "V";
+    Serial.printf("PWM: Calibrated %s - Input: %.1f-%.1f, Range: %d-%d %s\n", 
+                  gauge->name, min_input, max_input, min_range, max_range, mode_str);
 }
 
 void PWM_EnableSmoothing(int channel, float smooth_factor) {
@@ -172,20 +199,45 @@ void PWM_SetGaugeEnabled(int channel, bool enabled) {
     gauges[channel].enabled = enabled;
     
     if (!enabled) {
-        // Set to minimum when disabled - Updated for Arduino Core 3.x
-        ledcWrite(gauges[channel].gpio_pin, gauges[channel].min_pwm);
+        // Set to minimum when disabled
+        if (gauges[channel].is_frequency_mode) {
+            ledcDetach(gauges[channel].gpio_pin);
+            pinMode(gauges[channel].gpio_pin, OUTPUT);
+            digitalWrite(gauges[channel].gpio_pin, LOW);
+        } else {
+            analogWrite(gauges[channel].gpio_pin, 0);
+        }
+    } else {
+        // Re-enable with current value
+        PWM_SetGaugeValue(channel, gauges[channel].current_value);
     }
     
     Serial.printf("PWM: %s %s\n", gauges[channel].name, enabled ? "enabled" : "disabled");
 }
 
-void PWM_TestGauge(int channel, int test_pwm_value) {
+void PWM_TestGauge(int channel, int test_value) {
     if (channel < 0 || channel >= num_gauges) return;
     
-    test_pwm_value = constrain(test_pwm_value, 0, PWM_MAX_VALUE);
-    ledcWrite(gauges[channel].gpio_pin, test_pwm_value);
+    test_value = constrain(test_value, 0, gauges[channel].is_frequency_mode ? 40000 : 255);
     
-    Serial.printf("PWM: Testing %s with PWM %d\n", gauges[channel].name, test_pwm_value);
+    if (gauges[channel].is_frequency_mode) {
+        // Frequency mode
+        if (test_value > 0) {
+            ledcDetach(gauges[channel].gpio_pin);
+            ledcAttach(gauges[channel].gpio_pin, test_value, PWM_RESOLUTION);
+            ledcWrite(gauges[channel].gpio_pin, PWM_DUTY_CYCLE);
+        } else {
+            ledcDetach(gauges[channel].gpio_pin);
+            pinMode(gauges[channel].gpio_pin, OUTPUT);
+            digitalWrite(gauges[channel].gpio_pin, LOW);
+        }
+        Serial.printf("PWM: Testing %s with %d Hz\n", gauges[channel].name, test_value);
+    } else {
+        // Voltage mode
+        analogWrite(gauges[channel].gpio_pin, test_value);
+        Serial.printf("PWM: Testing %s with %d/255 (%.1fV)\n", 
+                      gauges[channel].name, test_value, (test_value * 3.3f / 255.0f));
+    }
 }
 
 void PWM_SweepGauge(int channel) {
@@ -193,56 +245,58 @@ void PWM_SweepGauge(int channel) {
     
     Serial.printf("PWM: Sweeping %s...\n", gauges[channel].name);
     
-    // Sweep from min to max
-    for (int pwm = gauges[channel].min_pwm; pwm <= gauges[channel].max_pwm; pwm += 50) {
-        ledcWrite(gauges[channel].gpio_pin, pwm);
-        delay(50);
-    }
-    
-    // Sweep back to min
-    for (int pwm = gauges[channel].max_pwm; pwm >= gauges[channel].min_pwm; pwm -= 50) {
-        ledcWrite(gauges[channel].gpio_pin, pwm);
-        delay(50);
+    if (gauges[channel].is_frequency_mode) {
+        // Frequency sweep
+        for (int freq = gauges[channel].min_freq; freq <= gauges[channel].max_freq; freq += 100) {
+            if (freq > 0) {
+                ledcDetach(gauges[channel].gpio_pin);
+                ledcAttach(gauges[channel].gpio_pin, freq, PWM_RESOLUTION);
+                ledcWrite(gauges[channel].gpio_pin, PWM_DUTY_CYCLE);
+            }
+            delay(100);
+        }
+        
+        // Return to minimum
+        if (gauges[channel].min_freq > 0) {
+            ledcDetach(gauges[channel].gpio_pin);
+            ledcAttach(gauges[channel].gpio_pin, gauges[channel].min_freq, PWM_RESOLUTION);
+            ledcWrite(gauges[channel].gpio_pin, PWM_DUTY_CYCLE);
+        } else {
+            ledcDetach(gauges[channel].gpio_pin);
+            pinMode(gauges[channel].gpio_pin, OUTPUT);
+            digitalWrite(gauges[channel].gpio_pin, LOW);
+        }
+    } else {
+        // Voltage sweep
+        for (int volt = gauges[channel].min_freq; volt <= gauges[channel].max_freq; volt += 10) {
+            analogWrite(gauges[channel].gpio_pin, volt);
+            delay(50);
+        }
+        
+        // Return to minimum
+        analogWrite(gauges[channel].gpio_pin, gauges[channel].min_freq);
     }
     
     Serial.printf("PWM: Sweep complete for %s\n", gauges[channel].name);
 }
 
 void PWM_PrintStatus() {
-    Serial.println("\n📊 === PWM Gauge Status ===");
-    Serial.printf("Active gauges: %d/%d\n", num_gauges, MAX_GAUGE_CHANNELS);
+    Serial.println("\n📊 === Dual-Mode Gauge Status ===");
+    Serial.printf("Active gauge channels: %d/%d\n", num_gauges, MAX_GAUGE_CHANNELS);
     
     for (int i = 0; i < num_gauges; i++) {
         GaugeChannel* gauge = &gauges[i];
         unsigned long age = (millis() - gauge->last_update) / 1000;
         
-        Serial.printf("  %s (GPIO%d): ", gauge->name, gauge->gpio_pin);
-        Serial.printf("%.1f -> PWM %d (%s, %lu sec ago)\n", 
-                      gauge->current_value, gauge->current_pwm,
+        const char* mode_str = gauge->is_frequency_mode ? "FREQ" : "VOLT";
+        const char* unit_str = gauge->is_frequency_mode ? "Hz" : "/255";
+        
+        Serial.printf("  %s (GPIO%d, %s): ", gauge->name, gauge->gpio_pin, mode_str);
+        Serial.printf("%.1f -> %d%s (%s, %lu sec ago)\n", 
+                      gauge->current_value, gauge->current_freq, unit_str,
                       gauge->enabled ? "ON" : "OFF", age);
     }
-    Serial.println("==========================\n");
-}
-
-// Convenience Functions
-int PWM_AddSpeedGauge(int gpio_pin, float max_speed) {
-    return PWM_AddGauge(gpio_pin, "Speed", 0.0, max_speed, 0, PWM_MAX_VALUE);
-}
-
-int PWM_AddTachGauge(int gpio_pin, float max_rpm) {
-    return PWM_AddGauge(gpio_pin, "Tachometer", 0.0, max_rpm, 0, PWM_MAX_VALUE);
-}
-
-int PWM_AddTempGauge(int gpio_pin, float min_temp, float max_temp) {
-    return PWM_AddGauge(gpio_pin, "Temperature", min_temp, max_temp, 0, PWM_MAX_VALUE);
-}
-
-int PWM_AddFuelGauge(int gpio_pin) {
-    return PWM_AddGauge(gpio_pin, "Fuel", 0.0, 100.0, 0, PWM_MAX_VALUE);
-}
-
-int PWM_AddVoltGauge(int gpio_pin, float min_volt, float max_volt) {
-    return PWM_AddGauge(gpio_pin, "Voltage", min_volt, max_volt, 0, PWM_MAX_VALUE);
+    Serial.println("==============================\n");
 }
 
 // Utility Functions
@@ -251,9 +305,9 @@ float PWM_GetGaugeValue(int channel) {
     return gauges[channel].current_value;
 }
 
-int PWM_GetGaugePWM(int channel) {
+int PWM_GetGaugeOutput(int channel) {
     if (channel < 0 || channel >= num_gauges) return 0;
-    return gauges[channel].current_pwm;
+    return gauges[channel].current_freq;
 }
 
 bool PWM_IsGaugeEnabled(int channel) {
@@ -266,6 +320,11 @@ const char* PWM_GetGaugeName(int channel) {
     return gauges[channel].name;
 }
 
+bool PWM_IsFrequencyMode(int channel) {
+    if (channel < 0 || channel >= num_gauges) return false;
+    return gauges[channel].is_frequency_mode;
+}
+
 // Advanced Functions
 void PWM_SetAllGauges(float value) {
     for (int i = 0; i < num_gauges; i++) {
@@ -276,14 +335,12 @@ void PWM_SetAllGauges(float value) {
 }
 
 void PWM_TestAllGauges() {
-    Serial.println("PWM: Testing all gauges...");
+    Serial.println("PWM: Testing all gauge outputs...");
     for (int i = 0; i < num_gauges; i++) {
-
-        // DISABLE SWEEPING FOR NOW
-        // if (gauges[i].enabled) {
-        //     PWM_SweepGauge(i);
-        //     delay(500);
-        // }
+        if (gauges[i].enabled) {
+            PWM_SweepGauge(i);
+            delay(500);
+        }
     }
     Serial.println("PWM: All gauge tests complete");
 }

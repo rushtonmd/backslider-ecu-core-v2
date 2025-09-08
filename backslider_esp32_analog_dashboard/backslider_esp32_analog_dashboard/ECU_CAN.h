@@ -13,7 +13,7 @@
 
 // CAN Configuration
 #define CAN_TX_PIN GPIO_NUM_3
-#define CAN_RX_PIN GPIO_NUM_4
+#define CAN_RX_PIN GPIO_NUM_2
 
 // Protocol Constants
 #define READ_REQUEST  0x01

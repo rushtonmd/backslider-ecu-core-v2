@@ -67,9 +67,9 @@ SimpleNextion display(&Serial2);
 #define NEXTION_STATUS_TEXT     "status"        // Connection status
 
 // PWM Gauge configuration - CHANGE THESE PINS AS NEEDED
-#define SPEED_GAUGE_PIN GPIO_NUM_6    // PWM output for speed gauge
-#define TEMP_GAUGE_PIN GPIO_NUM_5     // PWM output for coolant temperature gauge  
-#define OIL_GAUGE_PIN GPIO_NUM_4     // PWM output for oil pressure gauge
+#define SPEED_GAUGE_PIN 7    // PWM output for speed gauge
+#define TEMP_GAUGE_PIN 6     // PWM output for coolant temperature gauge  
+#define OIL_GAUGE_PIN 4     // PWM output for oil pressure gauge
 
 // Loop performance monitoring
 unsigned long loop_counter = 0;
@@ -101,9 +101,17 @@ void setup() {
         Serial.println("✅ PWM gauge system initialized");
         
         // Add gauges with calibration
-        speed_gauge_channel = PWM_AddSpeedGauge(SPEED_GAUGE_PIN, 200.0);  // 0-200 kph
-        coolant_temp_gauge_channel = PWM_AddTempGauge(TEMP_GAUGE_PIN, 60, 120);    // 60-120°C  
-        oil_pressure_gauge_channel = PWM_AddGauge(OIL_GAUGE_PIN, "Oil Pressure", 0.0, 800.0, 0, 4095); // 0-800 kPa
+        // speed_gauge_channel = PWM_AddSpeedGauge(SPEED_GAUGE_PIN, 200.0);  // 0-200 kph
+        // coolant_temp_gauge_channel = PWM_AddTempGauge(TEMP_GAUGE_PIN, 60, 120);    // 60-120°C  
+        // oil_pressure_gauge_channel = PWM_AddGauge(OIL_GAUGE_PIN, "Oil Pressure", 0.0, 800.0, 0, 4095); // 0-800 kPa
+
+        // Frequency-based speedometer (LEDC mode)
+        speed_gauge_channel = PWM_AddGauge(SPEED_GAUGE_PIN, "Speed", GAUGE_MODE_FREQUENCY, 0.0, 260.0, 20, 750);
+
+        // Voltage-based analog gauges (analogWrite mode)
+        coolant_temp_gauge_channel = PWM_AddGauge(TEMP_GAUGE_PIN, "Coolant Temp", GAUGE_MODE_VOLTAGE, 0.0, 130.0, 50, 255);
+        oil_pressure_gauge_channel = PWM_AddGauge(OIL_GAUGE_PIN, "Oil Pressure", GAUGE_MODE_VOLTAGE, 0.0, 500.0, 120, 255);
+
         
         // Enable smoothing for smoother needle movement
         if (speed_gauge_channel >= 0) {
@@ -188,6 +196,10 @@ void loop() {
     updateGearDisplay(GEAR_BACKUP_INTERVAL);            // Immediate on change + 1s backup
     updateLinePressureDisplay(UPDATE_1HZ_INTERVAL);     // 1Hz with change detection
     updatePWMGauges();                                 // Multi-rate PWM updates
+
+    //PWM_SetGaugeValue(coolant_temp_gauge_channel, 80);
+    //PWM_SetGaugeValue(oil_pressure_gauge_channel, 200);
+
 
     // IMPORTANT: Process Nextion command queue (do this AFTER display updates)
     display.update();
@@ -703,9 +715,12 @@ void updatePWMGauges() {
     static float last_pwm_speed = -999.0;
     
     if (millis() - last_speed_gauge >= UPDATE_10HZ_INTERVAL) {
+       /// PWM_SetGaugeValueSmooth(speed_gauge_channel, 100);
         float speed = CAN_GetVehicleSpeed();
-        bool speed_fresh = CAN_IsParameterFresh(PARAM_VEHICLE_SPEED, SPEED_DATA_TIMEOUT);
         
+
+        bool speed_fresh = CAN_IsParameterFresh(PARAM_VEHICLE_SPEED, SPEED_DATA_TIMEOUT);
+
         // Only update PWM if speed changed significantly
         if (speed_gauge_channel >= 0 && speed_fresh && 
             abs(speed - last_pwm_speed) >= SPEED_CHANGE_THRESHOLD) {
