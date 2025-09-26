@@ -16,8 +16,8 @@
 SimpleNextion display(&Serial2);
 
 // Nextion configuration - CHANGE THESE PINS AS NEEDED
-#define NEXTION_RX_PIN 10   // ESP32 RX (connect to Nextion TX)
-#define NEXTION_TX_PIN 12   // ESP32 TX (connect to Nextion RX)
+#define NEXTION_RX_PIN 12   // ESP32 RX (connect to Nextion TX)
+#define NEXTION_TX_PIN 10   // ESP32 TX (connect to Nextion RX)
 #define NEXTION_BAUD 115200  // Standard Nextion baud rate
 
 // Update Rate Constants (in milliseconds)
@@ -745,6 +745,7 @@ void updatePWMGauges() {
             last_pwm_temp = coolant_temp;
         }
         last_temp_gauge = millis();
+
     }
     
     // Pressure gauges - configurable rate with change detection
@@ -761,6 +762,7 @@ void updatePWMGauges() {
             PWM_SetGaugeValueSmooth(oil_pressure_gauge_channel, oil_pressure);
             last_pwm_pressure = oil_pressure;
         }
+
         last_pressure_gauge = millis();
     }
 }

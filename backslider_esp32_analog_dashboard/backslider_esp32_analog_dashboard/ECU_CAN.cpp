@@ -46,7 +46,7 @@ static unsigned long last_gear_request = 0;
 // Update intervals (in milliseconds)
 static const unsigned long SPEED_REQUEST_INTERVAL = 100;    // 10Hz
 static const unsigned long TEMP_REQUEST_INTERVAL = 1000;    // 1Hz  
-static const unsigned long GEAR_REQUEST_INTERVAL = 200;     // 5Hz
+static const unsigned long GEAR_REQUEST_INTERVAL = 100;     // 10Hz
 
 // Parameter categories
 static const uint32_t SPEED_PARAMS[] = {
@@ -331,6 +331,26 @@ static void sendParameterRequest(uint32_t param_id, const char* category) {
     }
 }
 
+void printTwaiMessage(const twai_message_t& message) {
+    Serial.print("ID: 0x");
+    Serial.print(message.identifier, HEX);
+    
+    Serial.print(" | Flags: 0x");
+    Serial.print(message.flags, HEX);
+    
+    Serial.print(" | Data Length: ");
+    Serial.print(message.data_length_code);
+    
+    Serial.print(" | Data: ");
+    for (int i = 0; i < message.data_length_code && i < 8; i++) {
+        if (i > 0) Serial.print(" ");
+        if (message.data[i] < 0x10) Serial.print("0");
+        Serial.print(message.data[i], HEX);
+    }
+    
+    Serial.println();
+}
+
 static void handleCANMessages() {
     twai_message_t message;
     
@@ -348,6 +368,10 @@ static void handleCANMessages() {
 }
 
 static bool processMessage(const twai_message_t& message) {
+
+    // used for debugging
+    //printTwaiMessage(message);
+
     // Route to appropriate processor based on frame type
     if (message.extd) {
         // Extended frames - Custom ECU
@@ -360,7 +384,7 @@ static bool processMessage(const twai_message_t& message) {
             return processHaltechMessage(message);
         } else {
             // Other standard frames - try custom ECU with truncated ID matching
-            return processCustomECUMessage(message);
+            //return processCustomECUMessage(message);
         }
     }
 }
@@ -368,7 +392,8 @@ static bool processMessage(const twai_message_t& message) {
 static bool processCustomECUMessage(const twai_message_t& message) {
     // Find matching parameter by exact ID first
     ECUParameter* param = findParameterByID(message.identifier);
-    
+
+ 
     // If not found and it's a standard frame, try matching truncated extended IDs
     if (!param && !message.extd) {
         for (int i = 0; i < NUM_PARAMETERS; i++) {
@@ -386,12 +411,12 @@ static bool processCustomECUMessage(const twai_message_t& message) {
     
     if (!param) {
         // Uncomment for debugging unknown IDs
-        // Serial.printf("CAN: Unknown Custom ECU ID: 0x%08X\n", message.identifier);
+        //Serial.printf("CAN: Unknown Custom ECU ID: 0x%08X\n", message.identifier);
         return false;
     }
     
     if (message.data_length_code != 8) {
-        Serial.printf("CAN: Invalid DLC for %s: %d\n", param->name, message.data_length_code);
+        //Serial.printf("CAN: Invalid DLC for %s: %d\n", param->name, message.data_length_code);
         return false;
     }
     
@@ -399,6 +424,7 @@ static bool processCustomECUMessage(const twai_message_t& message) {
     
     if (operation == READ_REQUEST) {
         // Echo of our own request - ignore silently
+        //Serial.println("READ REQUEST IGNORE SILENTLY");
         return false;
     } else if (operation == READ_RESPONSE) {
         // Extract float value (little endian)
@@ -419,7 +445,7 @@ static bool processCustomECUMessage(const twai_message_t& message) {
             //Serial.printf("CAN: ✅ %s: %.2f %s (VALUE CHANGED)\n", param->name, value, param->unit);
         }
         // Uncomment this line to see all responses (even unchanged values)
-        // else { Serial.printf("CAN: 🔄 %s: %.2f %s (unchanged)\n", param->name, value, param->unit); }
+         //else { Serial.printf("CAN: 🔄 %s: %.2f %s (unchanged)\n", param->name, value, param->unit); }
         
         return true;
     }
@@ -466,13 +492,14 @@ static bool processHaltechMessage(const twai_message_t& message) {
                 // Oil Pressure: bytes 2-3, big-endian, absolute kPa
                 uint16_t raw_oil = (message.data[2] << 8) | message.data[3];
                 float oil_absolute = raw_oil / 10.0;
-                float new_oil_pressure = oil_absolute - 101.3; // Convert to gauge pressure
+                float new_oil_pressure = oil_absolute - 101.3; // Convert to gauge pressure. At sea level, the standard atmospheric pressure is 101.325 kilopascals (kPa)
                 
                 // Check if value changed
                 bool pressure_changed = (haltech_data.oil_pressure != new_oil_pressure);
                 
                 // ALWAYS update timestamp and validity
                 haltech_data.oil_pressure = new_oil_pressure;
+                // TEMP FOR TESTING
                 haltech_data.last_pressure_update = millis();  // ✅ ALWAYS update
                 haltech_data.pressure_data_valid = true;       // ✅ ALWAYS mark valid
                 
