@@ -96,7 +96,7 @@ static uint32_t last_speed_update_ms = 0;
 static uint32_t last_brake_update_ms = 0;
 
 // Overrun clutch override control (for testing/diagnostics)
-static bool overrun_manual_override_active = false;
+static bool overrun_manual_override_active = true;
 static overrun_clutch_state_t overrun_manual_override_state = OVERRUN_DISENGAGED;
 
 // Statistics
@@ -1394,8 +1394,9 @@ static void set_overrun_clutch(overrun_clutch_state_t state) {
     bool solenoid_power = (state == OVERRUN_DISENGAGED);
     
     // Send control message to output manager
-    g_message_bus.publishFloat(MSG_TRANS_OVERRUN_SOL, solenoid_power ? 1.0f : 0.0f);
-    
+    //g_message_bus.publishFloat(MSG_TRANS_OVERRUN_SOL, solenoid_power ? 1.0f : 0.0f);
+    // TODO: FIX THIS HARD CODED VALUE- TESTING OVERRUN
+    g_message_bus.publishFloat(MSG_TRANS_OVERRUN_SOL, 0.0f);
             // Debug output removed to reduce serial clutter
 }
 
